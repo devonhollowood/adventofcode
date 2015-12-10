@@ -1,3 +1,4 @@
+#haskell
 dist
 cabal-dev
 *.o
@@ -14,3 +15,7 @@ cabal.sandbox.config
 *.prof
 *.aux
 *.hp
+
+#other
+#ignore input files
+input.txt
