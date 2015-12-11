@@ -3,9 +3,19 @@ import Data.List (nub)
 main = do
     input <- readFile "input.txt"
     let directions = map toDir . filter (`elem` "^v<>") $ input
-    let houses = applyDirections (0,0) directions
+    let (santa_dir, robo_dir) = splitDirections directions
+    let santa_houses = applyDirections (0,0) santa_dir
+    let robo_houses = applyDirections (0,0) robo_dir
+    let houses = santa_houses ++ robo_houses
     let unique_houses = length . nub $ houses
     print unique_houses
+
+splitDirections :: [Direction] -> ([Direction], [Direction])
+splitDirections (x1:x2:xs) =
+    let (x1s, x2s) = splitDirections xs
+    in (x1:x1s, x2:x2s)
+splitDirections [x] = ([x], [])
+splitDirections []  = ([], [])
 
 applyDirections :: House -> [Direction] -> [House]
 applyDirections = scanl nextHouse
