@@ -8,14 +8,20 @@ classify :: String -> Classification
 classify s
     | all ($s) tests = Nice
     | otherwise = Naughty
-    where tests = [three_vowels, double_letter, no_forbidden]
+    where tests = [sandwich, doubleRepeat]
 
-three_vowels = (>=3) . length . filter (`elem` "aeiou")
+sandwich (x:y:z:xs) = x == z || sandwich (y:z:xs)
+sandwich _ = False
 
-double_letter (x:y:xs) = x==y || double_letter (y:xs)
-double_letter _ = False
+doubleRepeat (x:y:xs) = [x,y] `isInfixOf` xs || doubleRepeat (y:xs)
+doubleRepeat _ = False
 
-no_forbidden s = not $ any (`isInfixOf` s) forbidden
+threeVowels = (>=3) . length . filter (`elem` "aeiou")
+
+doubleLetter (x:y:xs) = x==y || doubleLetter (y:xs)
+doubleLetter _ = False
+
+noForbidden s = not $ any (`isInfixOf` s) forbidden
     where forbidden = ["ab", "cd", "pq", "xy"]
 
 isNice :: Classification -> Bool
