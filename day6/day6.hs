@@ -14,14 +14,14 @@ main = do
                    Right is -> return is
                    Left err -> die err
     let lights = setUpLights instrs
-    print . V.length $ V.filter isLit lights
+    print . V.sum . V.map brightness $ lights
 
 nrows = 1000
 ncols = 1000
 
 setUpLights :: [Instruction] -> Lights
 setUpLights instrs = runST $ do
-    mv <- MV.replicate (nrows*ncols) Unlit
+    mv <- MV.replicate (nrows*ncols) (Light 0)
     mapM_ (perform mv) instrs
     V.freeze mv
     where perform mv instr =
@@ -30,18 +30,15 @@ setUpLights instrs = runST $ do
 getSquare :: Coordinate -> Coordinate -> [Coordinate]
 getSquare (r1, c1) (r2, c2) = [(a, b) | a <- [r1..r2], b <- [c1..c2]]
 
-turnOn light = Lit
-turnOff light = Unlit
-toggle Lit = Unlit
-toggle Unlit = Lit
+turnOn (Light b)  = Light $ b+1
+turnOff (Light b) = Light $ max 0 (b-1)
+toggle (Light b) = Light $ b+2
 
 flatten :: Int -> Coordinate -> Int -- Translate Coordinate -> Vector Position
 flatten ncols (r,c) = r*ncols + c
 
 unflatten :: Int -> Int -> Coordinate -- Translate Vector Position -> Coordinate
 unflatten ncols pos = pos `divMod` ncols
-
-isLit light = light == Lit
 
 data Instruction = Instruction {
     action :: Action,
@@ -50,7 +47,10 @@ data Instruction = Instruction {
 type Action = Light -> Light
 type Lights = V.Vector Light
 type Coordinate = (Int, Int)
-data Light = Lit | Unlit deriving (Eq, Show)
+data Light = Light {
+    brightness:: Brightness
+}
+type Brightness = Int
 
 parseInput :: B.ByteString -> Either String [Instruction]
 parseInput = parseOnly $ concat <$> pInstructions `sepBy` endOfLine <* ending
