@@ -8,6 +8,7 @@ import Control.Applicative ((<|>))
 import Control.Monad.ST (runST)
 import System.Exit (die)
 
+main :: IO ()
 main = do
     input <- B.readFile "input.txt"
     instrs <- case parseInput input of
@@ -16,7 +17,10 @@ main = do
     let lights = setUpLights instrs
     print . V.sum . V.map brightness $ lights
 
+nrows :: Int
 nrows = 1000
+
+ncols :: Int
 ncols = 1000
 
 setUpLights :: [Instruction] -> Lights
@@ -30,15 +34,17 @@ setUpLights instrs = runST $ do
 getSquare :: Coordinate -> Coordinate -> [Coordinate]
 getSquare (r1, c1) (r2, c2) = [(a, b) | a <- [r1..r2], b <- [c1..c2]]
 
+turnOn :: Action
 turnOn (Light b)  = Light $ b+1
+
+turnOff :: Action
 turnOff (Light b) = Light $ max 0 (b-1)
+
+toggle :: Action
 toggle (Light b) = Light $ b+2
 
 flatten :: Int -> Coordinate -> Int -- Translate Coordinate -> Vector Position
-flatten ncols (r,c) = r*ncols + c
-
-unflatten :: Int -> Int -> Coordinate -- Translate Vector Position -> Coordinate
-unflatten ncols pos = pos `divMod` ncols
+flatten numcols (r,c) = r*numcols + c
 
 data Instruction = Instruction {
     action :: Action,
@@ -72,6 +78,7 @@ pAction = pOn <|> pOff <|> pToggle
           pOff = string "turn off" *> pure turnOff
           pToggle = string "toggle" *> pure toggle
 
+pCoord :: Parser Coordinate
 pCoord = do
     row <- decimal
     char ','
