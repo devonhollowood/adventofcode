@@ -5,18 +5,21 @@ import Data.Attoparsec.ByteString.Char8
 import Control.Applicative
 import Control.Monad.Trans.State.Lazy
 import Control.Monad.Trans
-import System.Exit (die)
 import Data.Char (isLower)
 import Data.Bits
+import Data.Maybe (fromMaybe)
 import qualified Data.Map as M
 
 main :: IO ()
 main = do
     input <- B.readFile "input.txt"
-    wire_map <- case parseInput input of
-                  Right ws -> return ws
-                  Left err -> die err
-    print $ resolve wire_map (VariableRef $ Variable "a")
+    let wire_map = case parseInput input of
+                  Right ws -> ws
+                  Left err -> error err
+    let a = fromMaybe (error "\"a\" uncalculable") $
+                resolve wire_map (VariableRef $ Variable "a")
+    let wire_map' = M.insert (Variable "b") (Literal a) wire_map
+    print $ resolve wire_map' (VariableRef $ Variable "a")
 
 resolve :: ExprTable -> Expression -> Maybe Int
 resolve exprs expr = evalStateT (resolveExpr exprs expr) M.empty
