@@ -1,10 +1,17 @@
-import Data.Char (isHexDigit, isSpace)
-import Control.Monad (liftM)
+import Data.Char (isHexDigit)
 
 main :: IO ()
 main = do
-    input <- liftM (filter (not . isSpace)) $ readFile "input.txt"
-    print $ codeChars input - memChars input
+    input <- readFile "input.txt"
+    let encoded = concatMap encode . lines $ input
+    let unencoded = concat . lines $ input
+    print $ codeChars encoded - codeChars unencoded
+
+encode :: String -> String
+encode s = "\"" ++ concatMap escape s ++ "\""
+    where escape '\"' = "\\\""
+          escape '\\' = "\\\\"
+          escape x = [x]
 
 codeChars :: String -> Int
 codeChars = length
