@@ -4,7 +4,7 @@ import Data.Char (digitToInt, isDigit)
 main :: IO ()
 main = do
     input <- map digitToInt . filter isDigit <$> readFile "input.txt"
-    print . length . (!! 40) . iterate lookAndSay $ input
+    print . length . (!! 50) . iterate lookAndSay $ input
 
 lookAndSay :: [Int] -> [Int]
 lookAndSay = concatMap say . group
