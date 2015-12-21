@@ -15,13 +15,13 @@ main = do
     print $ shortestTrip world
 
 shortestTrip :: World -> Maybe Distance
-shortestTrip w = listSafe minimum . map (bestTripFrom w) $ nodes w
+shortestTrip w = listSafe maximum . map (bestTripFrom w) $ nodes w
 
 bestTripFrom :: World -> Location -> Distance
 bestTripFrom w l = fromMaybe 0 (edgesFrom w l >>= bestOfEdges w l)
 
 bestOfEdges :: World -> Location -> [(Location, Distance)] -> Maybe Distance
-bestOfEdges w from = listSafe minimum . map (get_trip_len subw)
+bestOfEdges w from = listSafe maximum . map (get_trip_len subw)
     where subw = deleteUndirected w from
           get_trip_len w' (dest, dist)
               | null w' = 0
