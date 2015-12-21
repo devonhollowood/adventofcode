@@ -19,3 +19,5 @@ cabal.sandbox.config
 #other
 #ignore input files
 input.txt
+#ignore vim files
+*.swp
