@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 import qualified Data.ByteString as B
 import Data.Aeson
 import Data.Scientific
@@ -11,7 +12,9 @@ main = do
     print $ addDigits decoded
 
 addDigits :: Value -> Scientific
-addDigits (Object o) = sum . map addDigits $ HM.elems o
+addDigits (Object o)
+    | "red" `elem` HM.elems o = 0
+    | otherwise = sum . map addDigits $ HM.elems o
 addDigits (Array a) = sum . fmap addDigits $ a
 addDigits (Number n) = n
 addDigits _ = 0
