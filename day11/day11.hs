@@ -1,10 +1,10 @@
 main :: IO ()
 main = do
     input <- filter validChar <$> readFile "input.txt"
-    putStrLn $ nextPassword input
+    putStrLn . nextPassword . nextPassword $ input
 
 nextPassword :: String -> String
-nextPassword = until validPassword (getNext . increment)
+nextPassword = until validPassword (getNext . increment) . getNext . increment
 
 validPassword :: String -> Bool
 validPassword pass = all ($pass) conditions
