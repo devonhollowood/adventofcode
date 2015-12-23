@@ -21,3 +21,6 @@ cabal.sandbox.config
 input.txt
 #ignore vim files
 *.swp
+#ignore executables
+*/day?
+*/day??
