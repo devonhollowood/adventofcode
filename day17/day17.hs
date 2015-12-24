@@ -1,9 +1,13 @@
-import Data.List (sort)
+import Data.List (sort, sortBy, groupBy)
+import Data.Ord (comparing)
+import Data.Function (on)
 
 main = do
     containers <- map (read :: String -> Int) . lines <$> readFile "input.txt"
     let ascending = sort containers
-    print . length . ascCombos 150 $ ascending
+    print . length . head . groupBy ((==) `on` length)
+          . sortBy (comparing length) . ascCombos 150
+          $ ascending
 
 -- Ways to fill `size` from ascending list
 ascCombos :: Int -> [Int] -> [[Int]]
