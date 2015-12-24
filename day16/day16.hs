@@ -13,7 +13,13 @@ main = do
 
 matches :: Sue -> M.Map Attribute Int -> Bool
 matches Sue{..} m = all (attrmatch m) attributes
-    where attrmatch m (attr, num) = maybe True (==num) (M.lookup attr m)
+    where attrmatch m (attr, num)
+            | attr `elem` ["cats", "trees"] =
+                maybe True (< num) (M.lookup attr m)
+            | attr `elem` ["pomeranians", "goldfish"] =
+                maybe True (> num) (M.lookup attr m)
+            | otherwise =
+                maybe True (== num) (M.lookup attr m)
 
 pSues :: Parser [Sue]
 pSues = pSue `sepBy` endOfLine <* ending
