@@ -10,7 +10,8 @@ import Control.Monad
 main :: IO ()
 main = do
     ingrs <- parseAssert pIngredients <$> B.readFile "input.txt"
-    print . maximum . map score . combinations 100 $ ingrs
+    print . maximum . map score . filter valid . combinations 100 $ ingrs
+    where valid combo = calories (combine combo) == 500
 
 score :: [(Int, Ingredient)] -> Score
 score amounts =
