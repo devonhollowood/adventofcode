@@ -3,13 +3,15 @@ extern crate clap;
 use std::io::prelude::*;
 use std::fs::File;
 
-#[derive(Clone, Copy, Debug)]
+use std::collections::HashSet;
+
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 enum Turn {
     Left,
     Right,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 enum Direction {
     North,
     East,
@@ -38,10 +40,16 @@ impl Direction {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 struct Position {
     x: i64,
     y: i64,
+}
+
+impl Position {
+    fn distance_from_origin(&self) -> u64 {
+        self.x.wrapping_abs() as u64 + self.y.wrapping_abs() as u64
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -64,9 +72,6 @@ impl Traveller {
             Direction::South => self.pos.y -= distance as i64,
             Direction::West => self.pos.x -= distance as i64,
         }
-    }
-    fn distance_from_origin(&self) -> u64 {
-        self.pos.x.wrapping_abs() as u64 + self.pos.y.wrapping_abs() as u64
     }
 }
 
@@ -127,11 +132,27 @@ fn main() {
     let mut source = parse_args()
         .unwrap_or_else(|err| panic!("Error reading file: {}", err));
     let mut santa = Traveller::new();
+    let mut visited = HashSet::new();
+    visited.insert(santa.pos);
+    let mut first_repeat = None;
     for instruction in read_instructions(&mut source)
         .unwrap_or_else(|err| panic!("Error reading instructions: {}", err))
     {
         santa.rotate(instruction.rotation);
-        santa.travel(instruction.distance);
+        for _ in 0..instruction.distance {
+            santa.travel(1);
+            if first_repeat.is_none() {
+                if visited.contains(&santa.pos) {
+                    first_repeat = Some(santa.pos);
+                } else {
+                    visited.insert(santa.pos);
+                }
+            }
+        }
     }
-    println!("Distance traveled: {}", santa.distance_from_origin());
+    println!("End distance traveled: {}", santa.pos.distance_from_origin());
+    match first_repeat {
+        Some(pos) => println!("Distance to first repeat: {}", pos.distance_from_origin()),
+        None => println!("No repeated positions!"),
+    }
 }
