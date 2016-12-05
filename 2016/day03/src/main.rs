@@ -38,13 +38,7 @@ fn parse_args() -> std::io::Result<Box<Read>> {
     }
 }
 
-fn read_triangles<R: Read>(source: &mut R)
-    -> std::io::Result<Vec<Triangle>>
-{
-    let mut contents = String::new();
-    println!("Reading contents");
-    source.read_to_string(&mut contents)?;
-    println!("Processing");
+fn read_triangles_horizontal(contents: &str) -> std::io::Result<Vec<Triangle>> {
     contents.lines().map(
         |line| {
             let sides: Vec<u64> = line.split_whitespace()
@@ -52,7 +46,6 @@ fn read_triangles<R: Read>(source: &mut R)
                     side.parse()
                         .map_err(|_| invalid_data(&format!("Bad side: {}", side)))
                 }).collect::<Result<_, _>>()?;
-            println!("Read {}", line);
             if sides.len() != 3 {
                 Err(invalid_data(&format!("Invalid line: {}", line)))
             } else {
@@ -62,13 +55,49 @@ fn read_triangles<R: Read>(source: &mut R)
     ).collect()
 }
 
+fn read_triangles_vertical(contents: &str) -> std::io::Result<Vec<Triangle>> {
+    let mut vecs = Vec::new();
+    for line in contents.lines() {
+        let sides: Vec<u64> = line.split_whitespace()
+            .map(|side| {
+                side.parse()
+                    .map_err(|_| invalid_data(&format!("Bad side: {}", side)))
+            }).collect::<Result<_, _>>()?;
+        if vecs.len() < sides.len() {
+            vecs.resize(sides.len(), Vec::new());
+        }
+        for (n, val) in sides.into_iter().enumerate() {
+            vecs[n].push(val);
+        }
+    }
+    let side_list: Vec<_> =
+        vecs.into_iter().fold(Vec::new(), |mut v1, v2| { v1.extend(v2); v1 });
+    let mut triangles = Vec::new();
+    for sides in side_list.chunks(3) {
+        if sides.len() != 3 {
+            return Err(invalid_data("Incomplete triangle"))
+        } else {
+            triangles.push(Triangle(sides[0], sides[1], sides[2]));
+        }
+    }
+    Ok(triangles)
+}
+
 fn main() {
     let mut source = parse_args()
         .unwrap_or_else(|err| panic!("Error reading file: {}", err));
-    let n_valid = read_triangles(&mut source)
+    let mut contents = String::new();
+    source.read_to_string(&mut contents).expect("Could not read input");
+    let n_valid_horizontal = read_triangles_horizontal(&contents)
         .unwrap_or_else(|err| panic!("Error reading triangles: {}", err))
         .iter()
         .filter(|t| t.is_valid())
         .count();
-    println!("# of valid triangles: {}", n_valid);
+    let n_valid_vertical = read_triangles_vertical(&contents)
+        .unwrap_or_else(|err| panic!("Error reading triangles: {}", err))
+        .iter()
+        .filter(|t| t.is_valid())
+        .count();
+    println!("# of valid triangles (horizontal): {}", n_valid_horizontal);
+    println!("# of valid triangles (vertical): {}", n_valid_vertical);
 }
