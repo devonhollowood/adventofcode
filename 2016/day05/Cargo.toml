@@ -1,0 +1,8 @@
+[package]
+name = "day05"
+version = "0.1.0"
+authors = ["Devon Hollowood <devonhollowood@gmail.com>"]
+
+[dependencies]
+clap = "2.19.0"
+octavo = "0.1.1"
