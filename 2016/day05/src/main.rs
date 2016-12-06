@@ -17,7 +17,7 @@ fn md5_hex(input: &str) -> String {
     hex_str
 }
 
-fn crack_password(door_id: &str) -> String {
+fn crack_password_1(door_id: &str) -> String {
     let mut password = String::new();
     let mut index = 0u64;
     while password.len() < 8 {
@@ -30,6 +30,32 @@ fn crack_password(door_id: &str) -> String {
         index += 1;
     }
     password
+}
+
+fn crack_password_2(door_id: &str) -> String {
+    let mut password = vec![None; 8];
+    for index in 0u64.. {
+        if password.iter().all(|opt| opt.is_some()) {
+            break;
+        }
+        let hex = md5_hex(&format!("{}{}", door_id, index));
+        if !hex.starts_with("00000") {
+            continue;
+        }
+        let password_index_char =
+            hex.chars().nth(5).expect(&format!("invalid md5: {}", hex));
+        let password_index = match password_index_char.to_digit(8) {
+            Some(idx) => idx as usize,
+            None => continue,
+        };
+        if password[password_index].is_some() {
+            continue;
+        }
+        password[password_index] = Some(
+            hex.chars().nth(6).expect(&format!("invalid md5: {}", hex))
+        );
+    }
+    password.into_iter().map(|opt| opt.unwrap()).collect()
 }
 
 fn parse_args() -> String {
@@ -48,6 +74,6 @@ fn parse_args() -> String {
 
 fn main() {
     let door_id = parse_args();
-    let password = crack_password(&door_id);
-    println!("password: {}", password);
+    println!("first password: {}", crack_password_1(&door_id));
+    println!("second password: {}", crack_password_2(&door_id));
 }
