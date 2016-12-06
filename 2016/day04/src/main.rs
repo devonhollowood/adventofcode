@@ -35,6 +35,17 @@ impl Room {
         );
         letters.into_iter().take(5).collect()
     }
+    fn decrypt(&self) -> String {
+        fn rotate(ch: char, dist: u64) -> char {
+            match ch {
+                '-' => ' ',
+                'a'...'z' =>
+                    ((dist + ch as u64 - 'a' as u64) % 26 + 'a' as u64) as u8 as char,
+                _ => ch,
+            }
+        }
+        self.name.chars().map(|ch| rotate(ch, self.id)).collect()
+    }
 }
 
 fn invalid_data(msg: &str) -> Error {
@@ -105,4 +116,7 @@ fn main() {
         .map(|room| room.id)
         .sum();
     println!("Sum of valid room numbers: {}", valid_room_sum);
+    for room in rooms.iter().filter(|room| room.is_valid()) {
+        println!("{}: {}", room.id, room.decrypt());
+    }
 }
