@@ -29,7 +29,7 @@ fn read_messages<R: Read>(source: &mut R) -> std::io::Result<Vec<String>> {
     Ok(contents.lines().map(|line| line.trim().to_owned()).collect())
 }
 
-fn unfuzz(messages: &[String]) -> String {
+fn unfuzz_max(messages: &[String]) -> String {
     if messages.is_empty() {
         return String::new();
     }
@@ -47,10 +47,29 @@ fn unfuzz(messages: &[String]) -> String {
     ).cloned().collect()
 }
 
+fn unfuzz_min(messages: &[String]) -> String {
+    if messages.is_empty() {
+        return String::new();
+    }
+    let mut freqs = Vec::new();
+    for message in messages.iter() {
+        for (idx, ch) in message.char_indices() {
+            if freqs.len() <= idx {
+                freqs.resize(idx + 1, HashMap::new());
+            }
+            *freqs[idx].entry(ch).or_insert(0) += 1;
+        }
+    }
+    freqs.iter().map(
+        |set| set.iter().min_by_key(|&(_, v)| v).unwrap().0
+    ).cloned().collect()
+}
+
 fn main() {
     let mut source = parse_args()
         .unwrap_or_else(|err| panic!("Error reading file: {}", err));
     let messages = read_messages(&mut source)
         .unwrap_or_else(|err| panic!("Error reading messages: {}", err));
-    println!("Unfuzzed message: {}", unfuzz(&messages));
+    println!("Unfuzzed-by-max message: {}", unfuzz_max(&messages));
+    println!("Unfuzzed-by-min message: {}", unfuzz_min(&messages));
 }
