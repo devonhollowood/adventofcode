@@ -70,7 +70,7 @@ fn crack_password_2(door_id: &str) -> String {
 }
 
 fn parse_args() -> String {
-    clap::App::new("Day 04")
+    clap::App::new("Day 05")
         .author("Devon Hollowood")
         .arg(clap::Arg::with_name("door-id")
              .help("file to read rooms from. Reads from stdin otherwise")
