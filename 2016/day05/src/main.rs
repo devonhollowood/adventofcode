@@ -4,56 +4,67 @@ extern crate octavo;
 use octavo::digest::prelude::*;
 use std::fmt::Write;
 
-fn md5_hex(input: &str) -> String {
+fn md5(input: &str, mut output: &mut [u8]) {
     let mut digest = Md5::default();
-    let mut result = vec![0u8; Md5::output_bytes()];
     digest.update(input);
-    digest.result(&mut result);
-    let mut hex_str = String::new();
-    for num in result {
-        write!(hex_str, "{:02x}", num)
-            .expect(&format!("Could not write value to hex: {}", num));
+    digest.result(&mut output);
+}
+
+#[inline(always)]
+fn to_char(x: u8) -> char {
+    if x < 10 {
+        (x + '0' as u8) as char
+    } else if x < 16 {
+        (x - 10 + 'a' as u8) as char
+    } else {
+        panic!("bad hex value: {}", x)
     }
-    hex_str
 }
 
 fn crack_password_1(door_id: &str) -> String {
     let mut password = String::new();
-    let mut index = 0u64;
-    while password.len() < 8 {
-        let hex = md5_hex(&format!("{}{}", door_id, index));
-        if hex.starts_with("00000") {
-            password.push(
-                hex.chars().nth(5).expect(&format!("invalid md5: {}", hex))
-            );
+    let mut password_buffer = door_id.to_owned();
+    password.reserve(format!("{}", u64::max_value()).len());
+    let mut buf = vec![0u8; Md5::output_bytes()];
+    for index in 0u64.. {
+        if password.len() >= 8 {
+            break;
         }
-        index += 1;
+        password_buffer.truncate(door_id.len());
+        write!(password_buffer, "{}", index)
+            .expect("Could not write to buffer");
+        md5(&password_buffer, &mut buf);
+        if buf[0] == 0 && buf[1] == 0 && (buf[2] & 0xF0) == 0 {
+            password.push(to_char(buf[2] & 0xF));
+        }
     }
     password
 }
 
 fn crack_password_2(door_id: &str) -> String {
     let mut password = vec![None; 8];
+    let mut password_buffer = door_id.to_owned();
+    password.reserve(format!("{}", u64::max_value()).len());
+    let mut buf = vec![0u8; Md5::output_bytes()];
     for index in 0u64.. {
         if password.iter().all(|opt| opt.is_some()) {
             break;
         }
-        let hex = md5_hex(&format!("{}{}", door_id, index));
-        if !hex.starts_with("00000") {
+        password_buffer.truncate(door_id.len());
+        write!(password_buffer, "{}", index)
+            .expect("Could not write to buffer");
+        md5(&password_buffer, &mut buf);
+        if !(buf[0] == 0 && buf[1] == 0 && (buf[2] & 0xF0) == 0) {
             continue;
         }
-        let password_index_char =
-            hex.chars().nth(5).expect(&format!("invalid md5: {}", hex));
-        let password_index = match password_index_char.to_digit(8) {
-            Some(idx) => idx as usize,
-            None => continue,
-        };
+        let password_index = (buf[2] & 0xF) as usize;
+        if password_index >= 8 {
+            continue;
+        }
         if password[password_index].is_some() {
             continue;
         }
-        password[password_index] = Some(
-            hex.chars().nth(6).expect(&format!("invalid md5: {}", hex))
-        );
+        password[password_index] = Some(to_char((buf[3] & 0xF0) >> 4));
     }
     password.into_iter().map(|opt| opt.unwrap()).collect()
 }
