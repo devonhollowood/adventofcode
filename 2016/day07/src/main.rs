@@ -2,118 +2,107 @@ extern crate clap;
 
 use std::io::prelude::*;
 use std::fs::File;
-use std::str::from_utf8;
-use std::ascii::AsciiExt;
+
+#[derive(Debug)]
+/// Iterator over parts of str in delimiters
+struct Delimited<'a> {
+    inner: &'a str,
+    start_char: char,
+    end_char: char,
+}
+
+impl<'a> Iterator for Delimited<'a> {
+    type Item = &'a str;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.inner.is_empty() {
+            return None;
+        }
+        let end = self.inner.len();
+        let next_end = self.inner
+            .find(self.end_char)
+            .unwrap_or(end);
+        let (delimited, rest) = self.inner.split_at(next_end);
+        let next_start = rest
+            .find(self.start_char)
+            .map(|p| p + 1)
+            .unwrap_or(end-delimited.len());
+        self.inner = &rest[next_start .. ];
+        Some(delimited)
+    }
+}
+
+fn exteriors(s: &str) -> Delimited {
+    Delimited { inner: &s, start_char: ']', end_char: '[' }
+}
+
+fn interiors(s: &str) -> Delimited {
+    let start = s.find('[').map(|p| p + 1).unwrap_or(s.len());
+    Delimited { inner: &s[start..], start_char: '[', end_char: ']' }
+}
 
 #[derive(Debug)]
 struct Abbas<'a> {
-    inner: &'a [u8],
-    idx: usize, // idx must never be left in a [] block
-}
-
-fn is_abba(candidate: &[u8]) -> bool {
-    candidate.len() == 4
-        && candidate[0] == candidate[3]
-        && candidate[1] == candidate[2]
-        && candidate[0] != candidate[1]
+    current: Option<&'a str>,
+    inner: Delimited<'a>,
 }
 
 impl<'a> Iterator for Abbas<'a> {
     type Item = &'a str;
     fn next(&mut self) -> Option<Self::Item> {
-        let inner_end = self.inner.len();
-        while self.idx < inner_end {
-            // stop = next '[' or end of string
-            let stop = self.inner[self.idx..]
-                .iter()
-                .position(|ch| *ch == '[' as u8) // position relative to idx
-                .map(|pos| pos + self.idx) // position relative to start
-                .unwrap_or(inner_end);
-            // continue until would run into stop
-            while self.idx <= stop - 4 {
-                let window = &self.inner[self.idx .. self.idx + 4];
-                if is_abba(window) {
-                    self.idx += 1;
-                    return Some(from_utf8(window).unwrap());
+        while self.current.is_some() {
+            while let Some(win) = window(self.current.unwrap(), 4) {
+                self.current = Some(advance(self.current.unwrap()));
+                if is_abba(win) {
+                    return Some(win);
                 }
-                self.idx += 1;
             }
-            // skip to stop
-            self.idx = stop;
-            // skip to next ']'
-            while self.idx < inner_end && self.inner[self.idx] != ']' as u8 {
-                self.idx += 1;
-            }
-            // go past ']'
-            if self.idx < inner_end {
-                self.idx += 1;
-            }
+            self.current = self.inner.next();
         }
-        return None;
-    }
-}
-
-#[derive(Debug)]
-struct AntiAbbas<'a> {
-    inner: &'a [u8],
-    idx: usize, // idx must always be left in a [] block, or at end
-}
-
-impl<'a> Iterator for AntiAbbas<'a> {
-    type Item = &'a str;
-    fn next(&mut self) -> Option<Self::Item> {
-        let inner_end = self.inner.len();
-        while self.idx < inner_end {
-            // stop = next ']' or end of string
-            let stop = self.inner[self.idx..]
-                .iter()
-                .position(|ch| *ch == ']' as u8) // position relative to idx
-                .map(|pos| pos + self.idx) // position relative to start
-                .unwrap_or(inner_end);
-            // continue until would run into stop
-            while self.idx <= stop - 4 {
-                let window = &self.inner[self.idx .. self.idx + 4];
-                if is_abba(window) {
-                    self.idx += 1;
-                    return Some(from_utf8(window).unwrap());
-                }
-                self.idx += 1;
-            }
-            // skip to stop
-            self.idx = stop;
-            // skip to next '['
-            while self.idx < inner_end && self.inner[self.idx] != '[' as u8 {
-                self.idx += 1;
-            }
-            // go into [] block
-            if self.idx < inner_end {
-                self.idx += 1;
-            }
-        }
-        return None;
+        None
     }
 }
 
 fn abbas(s: &str) -> Abbas {
-    if !s.is_ascii() {
-        panic!("Only ascii strings are supported");
-    }
-    Abbas { inner: s.as_bytes(), idx: 0 }
+    let mut delimiters = exteriors(s);
+    Abbas { current: delimiters.next(), inner: delimiters }
 }
 
-fn anti_abbas(s: &str) -> AntiAbbas {
-    if !s.is_ascii() {
-        panic!("Only ascii strings are supported");
-    }
-    AntiAbbas {
-        inner: s.as_bytes(),
-        idx: s.find('[').map(|pos| pos + 1).unwrap_or(s.len())
-    }
+fn anti_abbas(s: &str) -> Abbas {
+    let mut delimiters = interiors(s);
+    Abbas { current: delimiters.next(), inner: delimiters }
 }
 
-fn is_valid_ip(candidate: &str) -> bool {
-    anti_abbas(candidate).next().is_none()
-        && abbas(candidate).next().is_some()
+fn advance(s: &str) -> &str {
+    let mut iter = s.chars();
+    iter.next();
+    iter.as_str()
+}
+
+fn window(s: &str, len: usize) -> Option<&str> {
+    if len == 0 {
+        return None;
+    }
+    s.char_indices().nth(len-1).map(|(idx, ch)| &s[.. idx + ch.len_utf8()])
+}
+
+fn is_abba(candidate: &str) -> bool {
+    if candidate.len() != 4 {
+        return false;
+    }
+    let mut iter = candidate.chars();
+    let a = iter.next().unwrap();
+    let b = iter.next().unwrap();
+    let c = iter.next().unwrap();
+    let d = iter.next().unwrap();
+    a == d && b == c && a != b
+}
+
+fn supports_tls(candidate: &str) -> bool {
+    //anti_abbas(candidate).next().is_none()
+    //    && abbas(candidate).next().is_some()
+    let fst = abbas(candidate).count();
+    let snd = anti_abbas(candidate).count();
+    fst >= 1 && snd == 0
 }
 
 fn parse_args() -> std::io::Result<Box<Read>> {
@@ -146,6 +135,6 @@ fn main() {
         .unwrap_or_else(|err| panic!("Error reading file: {}", err));
     let ips = read_ips(&mut source)
         .unwrap_or_else(|err| panic!("Error reading ips: {}", err));
-    let n_valid_ips = ips.iter().filter(|ip| is_valid_ip(&ip)).count();
+    let n_valid_ips = ips.iter().filter(|ip| supports_tls(&ip)).count();
     println!("# of valid IPs: {}", n_valid_ips);
 }
