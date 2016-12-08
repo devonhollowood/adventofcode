@@ -22,26 +22,32 @@ impl<'a> Iterator for Delimited<'a> {
             .find(self.end_char)
             .unwrap_or(end);
         let (delimited, rest) = self.inner.split_at(next_end);
-        let next_start = rest
-            .find(self.start_char)
+        let next_start = rest.find(self.start_char)
             .map(|p| p + 1)
-            .unwrap_or(end-delimited.len());
-        self.inner = &rest[next_start .. ];
+            .unwrap_or(end - delimited.len());
+        self.inner = &rest[next_start..];
         Some(delimited)
     }
 }
 
 fn exteriors(s: &str) -> Delimited {
-    Delimited { inner: &s, start_char: ']', end_char: '[' }
+    Delimited {
+        inner: &s,
+        start_char: ']',
+        end_char: '[',
+    }
 }
 
 fn interiors(s: &str) -> Delimited {
     let start = s.find('[').map(|p| p + 1).unwrap_or(s.len());
-    Delimited { inner: &s[start..], start_char: '[', end_char: ']' }
+    Delimited {
+        inner: &s[start..],
+        start_char: '[',
+        end_char: ']',
+    }
 }
 
-struct SearchWindows<'a>
-{
+struct SearchWindows<'a> {
     current: Option<&'a str>,
     inner: Delimited<'a>,
     get_window: Box<Fn(&str) -> Option<&str>>,
@@ -49,22 +55,23 @@ struct SearchWindows<'a>
 }
 
 impl<'a> SearchWindows<'a> {
-    fn new<F, P>(mut delimiters: Delimited<'a>, get: F, pred: P)
-                 -> SearchWindows<'a> where
-        F: 'static + Fn(&str) -> Option<&str>,
-        P: 'static + Fn(&str) -> bool,
+    fn new<F, P>(mut delimiters: Delimited<'a>,
+                 get: F,
+                 pred: P)
+                 -> SearchWindows<'a>
+        where F: 'static + Fn(&str) -> Option<&str>,
+              P: 'static + Fn(&str) -> bool
     {
         SearchWindows {
             current: delimiters.next(),
             inner: delimiters,
             get_window: Box::new(get),
             predicate: Box::new(pred),
-            }
+        }
     }
 }
 
-impl<'a> Iterator for SearchWindows<'a>
-{
+impl<'a> Iterator for SearchWindows<'a> {
     type Item = &'a str;
     fn next(&mut self) -> Option<Self::Item> {
         while self.current.is_some() {
@@ -81,35 +88,19 @@ impl<'a> Iterator for SearchWindows<'a>
 }
 
 fn abbas(s: &str) -> SearchWindows {
-    SearchWindows::new(
-        exteriors(s),
-        |st| window(st, 4),
-        is_abba
-    )
+    SearchWindows::new(exteriors(s), |st| window(st, 4), is_abba)
 }
 
 fn anti_abbas(s: &str) -> SearchWindows {
-        SearchWindows::new(
-            interiors(s),
-            |st| window(st, 4),
-            is_abba
-        )
+    SearchWindows::new(interiors(s), |st| window(st, 4), is_abba)
 }
 
 fn abas(s: &str) -> SearchWindows {
-    SearchWindows::new(
-        exteriors(s),
-        |st| window(st, 3),
-        is_aba
-    )
+    SearchWindows::new(exteriors(s), |st| window(st, 3), is_aba)
 }
 
 fn anti_abas(s: &str) -> SearchWindows {
-    SearchWindows::new(
-        interiors(s),
-        |st| window(st, 3),
-        is_aba
-    )
+    SearchWindows::new(interiors(s), |st| window(st, 3), is_aba)
 }
 
 fn advance(s: &str) -> &str {
@@ -122,7 +113,7 @@ fn window(s: &str, len: usize) -> Option<&str> {
     if len == 0 {
         return None;
     }
-    s.char_indices().nth(len-1).map(|(idx, ch)| &s[.. idx + ch.len_utf8()])
+    s.char_indices().nth(len - 1).map(|(idx, ch)| &s[..idx + ch.len_utf8()])
 }
 
 fn is_abba(candidate: &str) -> bool {
@@ -157,15 +148,14 @@ fn is_corresponding_bab(aba: &str, candidate: &str) -> bool {
     let b = cand_iter.next().unwrap();
     let c = cand_iter.next().unwrap();
     let mut aba_iter = aba.chars();
-    aba_iter.next() == Some(b)
-        && aba_iter.next() == Some(a)
-        && aba_iter.next() == Some(b)
-        && a == c
+    aba_iter.next() == Some(b) &&
+        aba_iter.next() == Some(a) &&
+        aba_iter.next() == Some(b) &&
+        a == c
 }
 
 fn supports_tls(candidate: &str) -> bool {
-    anti_abbas(candidate).next().is_none()
-        && abbas(candidate).next().is_some()
+    anti_abbas(candidate).next().is_none() && abbas(candidate).next().is_some()
 }
 
 fn supports_ssl(candidate: &str) -> bool {
@@ -178,12 +168,11 @@ fn parse_args() -> std::io::Result<Box<Read>> {
     let source = clap::App::new("Day 07")
         .author("Devon Hollowood")
         .arg(clap::Arg::with_name("ips")
-             .index(1)
-             .short("f")
-             .long("ips")
-             .help("file to read IPs from. Reads from stdin otherwise")
-             .takes_value(true)
-        )
+            .index(1)
+            .short("f")
+            .long("ips")
+            .help("file to read IPs from. Reads from stdin otherwise")
+            .takes_value(true))
         .get_matches()
         .value_of_os("ips")
         .map(|str| str.to_owned());
