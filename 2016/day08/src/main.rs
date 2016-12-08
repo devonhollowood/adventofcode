@@ -174,4 +174,5 @@ fn main() {
         screen.apply(&instruction);
     }
     println!("Number of lit pixels: {}", screen.number_lit());
+    println!("{}", screen);
 }
