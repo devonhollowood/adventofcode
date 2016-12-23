@@ -3,78 +3,147 @@ extern crate clap;
 
 use std::io::prelude::*;
 use std::fs::File;
+use std::error::Error;
 
-#[derive(Debug)]
-struct ReadError {
-    reason: String,
+#[derive(Debug, PartialEq, Eq)]
+enum ParseExpansionError {
+    BadChar { expected: char, got: char },
+    BadInt(std::num::ParseIntError),
+    NotEnoughInput,
 }
 
-impl ReadError {
-    fn new(error: &str, position: usize) -> ReadError {
-        ReadError {
-            reason: format!("Error at position {}: {}", position, error),
+impl std::fmt::Display for ParseExpansionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        match *self {
+            ParseExpansionError::BadChar { expected: ref e, got: ref g } => {
+                write!(f, "Expected {}, got {}", e, g)
+            }
+            ParseExpansionError::BadInt(ref e) => write!(f, "{}", e),
+            ParseExpansionError::NotEnoughInput => {
+                write!(f, "Not enough input")
+            }
         }
     }
 }
 
-fn read_usize(input: &[u8],
-              position: usize)
-              -> Result<(usize, usize), ReadError> {
-    let mut end = 0;
-    while (input[end] as char).is_digit(10) {
-        end += 1;
+impl Error for ParseExpansionError {
+    fn description(&self) -> &str {
+        "Could not parse Expansion"
     }
-    let read = std::str::from_utf8(&input[..end])
-        .map_err(|e| ReadError::new(&format!("Bad read: {}", e), position))?
-        .parse()
-        .map_err(|e| ReadError::new(&format!("Bad read: {}", e), position))?;
-    Ok((read, end))
+    fn cause(&self) -> Option<&Error> {
+        match *self {
+            ParseExpansionError::BadInt(ref e) => Some(e),
+            _ => None,
+        }
+    }
 }
 
-fn decompress(input: &[u8]) -> Result<Vec<u8>, ReadError> {
+impl From<std::num::ParseIntError> for ParseExpansionError {
+    fn from(err: std::num::ParseIntError) -> Self {
+        ParseExpansionError::BadInt(err)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Expansion {
+    width: usize,
+    repetitions: usize,
+}
+
+fn read_expansion(input: &[u8])
+                  -> Result<(Expansion, usize), ParseExpansionError> {
+    use ParseExpansionError::*;
+    // read '('
+    if input.len() == 0 {
+        return Err(NotEnoughInput);
+    } else if input[0] != '(' as u8 {
+        return Err(BadChar {
+            expected: '(',
+            got: input[0] as char,
+        });
+    }
+    // read `width`
+    let mut idx = 1;
+    while idx < input.len() && (input[idx] as char).is_digit(10) {
+        idx += 1;
+    }
+    let width = std::str::from_utf8(&input[1..idx]).unwrap().parse()?;
+    // read 'x'
+    if input.len() < idx + 1 {
+        return Err(NotEnoughInput);
+    } else if input[idx] != 'x' as u8 {
+        return Err(BadChar {
+            expected: 'x',
+            got: input[idx] as char,
+        });
+    }
+    // read `repetitions`
+    idx += 1;
+    let repititions_start = idx;
+    while idx < input.len() && (input[idx] as char).is_digit(10) {
+        idx += 1;
+    }
+    let repetitions =
+        std::str::from_utf8(&input[repititions_start..idx]).unwrap().parse()?;
+    if input.len() < idx + 1 {
+        return Err(NotEnoughInput);
+    } else if input[idx] != ')' as u8 {
+        return Err(BadChar {
+            expected: ')',
+            got: input[idx] as char,
+        });
+    }
+    Ok((Expansion {
+        width: width,
+        repetitions: repetitions,
+    },
+        idx + 1))
+}
+
+fn decompress_a(input: &[u8]) -> Vec<u8> {
     let mut out = Vec::new();
     let mut idx = 0;
     while idx < input.len() {
-        if input[idx] == '(' as u8 {
-            idx += 1;
-            if idx >= input.len() {
-                return Err(ReadError::new("Unexpected end", idx));
+        if let Ok((Expansion { width, repetitions }, exp_len)) =
+               read_expansion(&input[idx..]) {
+            idx += exp_len;
+            for _ in 0..repetitions {
+                out.extend_from_slice(&input[idx..idx +
+                                                  std::cmp::min(width,
+                                                                input.len() -
+                                                                idx)]);
             }
-            let (rep_length, offset) = read_usize(&input[idx..], idx)?;
-            idx += offset;
-            if idx >= input.len() {
-                return Err(ReadError::new("Unexpected end", idx));
-            }
-            if input[idx] as char != 'x' {
-                return Err(ReadError::new(&format!("Expected 'x', got {}",
-                                                   input[idx]),
-                                          idx));
-            }
-            idx += 1;
-            let (n_reps, offset) = read_usize(&input[idx..], idx)?;
-            idx += offset;
-            if idx >= input.len() {
-                return Err(ReadError::new("Unexpected end", idx));
-            }
-            if input[idx] as char != ')' {
-                return Err(ReadError::new(&format!("Expected ')', got {}",
-                                                   input[idx]),
-                                          idx));
-            }
-            idx += 1;
-            if idx + rep_length > input.len() {
-                return Err(ReadError::new("Unexpected end", idx));
-            }
-            for _ in 0..n_reps {
-                out.extend_from_slice(&input[idx..idx + rep_length]);
-            }
-            idx += rep_length;
+            idx += width;
         } else {
             out.push(input[idx]);
             idx += 1;
         }
     }
-    Ok(out)
+    out
+}
+
+fn decompressed_b_len(input: &[u8]) -> usize {
+    let mut len = 0;
+    let mut idx = 0;
+    while idx < input.len() {
+        if let Ok((Expansion { width, repetitions }, exp_len)) =
+               read_expansion(&input[idx..]) {
+            idx += exp_len;
+            let sub_len =
+                decompressed_b_len(&input[idx..idx +
+                                               std::cmp::min(width,
+                                                             input.len() -
+                                                             idx)]);
+            len += sub_len * repetitions;
+            idx += width;
+        } else {
+            if !(input[idx] as char).is_whitespace() {
+                len += 1;
+            }
+            idx += 1;
+        }
+    }
+    len
 }
 
 fn parse_args() -> std::io::Result<String> {
@@ -105,48 +174,123 @@ fn parse_args() -> std::io::Result<String> {
 fn main() {
     let compressed = parse_args()
         .unwrap_or_else(|err| panic!("Error reading input: {}", err));
-    let decompressed = match decompress(compressed.as_bytes()) {
-        Ok(d) => d,
-        Err(e) => panic!(e.reason),
-    };
-    println!("Decompressed length: {}",
+    let decompressed = decompress_a(compressed.as_bytes());
+    println!("Decompressed length (first algorithm): {}",
              decompressed.iter()
                  .filter(|c| !(**c as char).is_whitespace())
                  .count());
+    println!("Decompressed length (second algorithm): {}",
+             decompressed_b_len(compressed.as_bytes()));
 }
 
 #[cfg(test)]
 mod tests {
-    use super::decompress;
+    use super::*;
 
     #[test]
-    fn t1() {
-        assert_eq!(&decompress(b"ADVENT").unwrap(), b"ADVENT")
+    fn decompress_a_1() {
+        assert_eq!(&decompress_a(b"ADVENT"), b"ADVENT")
     }
 
     #[test]
-    fn t2() {
-        assert_eq!(&decompress(b"A(1x5)BC").unwrap(), b"ABBBBBC")
+    fn decompress_a_2() {
+        assert_eq!(&decompress_a(b"A(1x5)BC"), b"ABBBBBC")
     }
 
     #[test]
-    fn t3() {
-        assert_eq!(&decompress(b"(3x3)XYZ").unwrap(), b"XYZXYZXYZ")
+    fn decompress_a_3() {
+        assert_eq!(&decompress_a(b"(3x3)XYZ"), b"XYZXYZXYZ")
     }
 
     #[test]
-    fn t4() {
-        assert_eq!(&decompress(b"A(2x2)BCD(2x2)EFG").unwrap(), b"ABCBCDEFEFG")
+    fn decompress_a_4() {
+        assert_eq!(&decompress_a(b"A(2x2)BCD(2x2)EFG"), b"ABCBCDEFEFG")
     }
 
     #[test]
-    fn t5() {
-        assert_eq!(&decompress(b"(6x1)(1x3)A").unwrap(), b"(1x3)A")
+    fn decompress_a_5() {
+        assert_eq!(&decompress_a(b"(6x1)(1x3)A"), b"(1x3)A")
     }
 
     #[test]
-    fn t6() {
-        assert_eq!(&decompress(b"X(8x2)(3x3)ABCY").unwrap(),
-                   b"X(3x3)ABC(3x3)ABCY")
+    fn decompress_a_6() {
+        assert_eq!(&decompress_a(b"X(8x2)(3x3)ABCY"), b"X(3x3)ABC(3x3)ABCY")
+    }
+
+    #[test]
+    fn decompress_a_not_enough_input() {
+        assert_eq!(&decompress_a(b"(3x3)XY"), b"XYXYXY");
+        assert_eq!(&decompress_a(b"(3x3)"), b"")
+    }
+
+    #[test]
+    fn read_expansion_success() {
+        assert_eq!(read_expansion(b"(123x456)foo"),
+                   Ok((Expansion {
+                       width: 123,
+                       repetitions: 456,
+                   },
+                       9)))
+    }
+
+    #[test]
+    fn read_expansion_not_enough_input() {
+        assert_eq!(read_expansion(b""),
+                   Err(ParseExpansionError::NotEnoughInput));
+        assert_eq!(read_expansion(b"(1"),
+                   Err(ParseExpansionError::NotEnoughInput));
+        assert_eq!(read_expansion(b"(1x2"),
+                   Err(ParseExpansionError::NotEnoughInput));
+    }
+
+    #[test]
+    fn read_expansion_expected() {
+        assert_eq!(read_expansion(b"1"),
+                   Err(ParseExpansionError::BadChar {
+                       expected: '(',
+                       got: '1',
+                   }));
+        assert_eq!(read_expansion(b"(1,"),
+                   Err(ParseExpansionError::BadChar {
+                       expected: 'x',
+                       got: ',',
+                   }));
+        assert_eq!(read_expansion(b"(1x2x"),
+                   Err(ParseExpansionError::BadChar {
+                       expected: ')',
+                       got: 'x',
+                   }));
+    }
+
+    #[test]
+    fn read_expansion_bad_int() {
+        let empty_int_error = "".parse::<usize>().unwrap_err();
+        assert_eq!(read_expansion(b"(x456)"),
+                   Err(ParseExpansionError::BadInt(empty_int_error.clone())));
+        assert_eq!(read_expansion(b"(123x)"),
+                   Err(ParseExpansionError::BadInt(empty_int_error)));
+    }
+
+    #[test]
+    fn decompress_b_len_1() {
+        assert_eq!(decompressed_b_len(b"(3x3)XYZ"), 9);
+    }
+
+    #[test]
+    fn decompress_b_len_2() {
+        assert_eq!(decompressed_b_len(b"X(8x2)(3x3)ABCY"), 20);
+    }
+
+    #[test]
+    fn decompress_b_len_3() {
+        assert_eq!(decompressed_b_len(b"(27x12)(20x12)(13x14)(7x10)(1x12)A"),
+                   241920);
+    }
+
+    #[test]
+    fn decompress_b_len_4() {
+        assert_eq!(decompressed_b_len(
+                b"(25x3)(3x3)ABC(2x3)XY(5x2)PQRSTX(18x9)(3x2)TWO(5x7)SEVEN"),
+                   445);
     }
 }
