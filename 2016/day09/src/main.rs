@@ -56,7 +56,7 @@ fn read_expansion(input: &[u8])
     // read '('
     if input.len() == 0 {
         return Err(NotEnoughInput);
-    } else if input[0] != '(' as u8 {
+    } else if input[0] != b'(' {
         return Err(BadChar {
             expected: '(',
             got: input[0] as char,
@@ -71,7 +71,7 @@ fn read_expansion(input: &[u8])
     // read 'x'
     if input.len() < idx + 1 {
         return Err(NotEnoughInput);
-    } else if input[idx] != 'x' as u8 {
+    } else if input[idx] != b'x' {
         return Err(BadChar {
             expected: 'x',
             got: input[idx] as char,
@@ -87,7 +87,7 @@ fn read_expansion(input: &[u8])
         std::str::from_utf8(&input[repititions_start..idx]).unwrap().parse()?;
     if input.len() < idx + 1 {
         return Err(NotEnoughInput);
-    } else if input[idx] != ')' as u8 {
+    } else if input[idx] != b')' {
         return Err(BadChar {
             expected: ')',
             got: input[idx] as char,
