@@ -6,7 +6,7 @@ extern crate regex;
 use std::io::prelude::*;
 use std::fs::File;
 use std::error::Error;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use regex::Regex;
 
 #[derive(Debug)]
@@ -90,15 +90,15 @@ impl Transfer {
 
 #[derive(Debug)]
 struct AssemblyLine {
-    bots: HashMap<usize, Bot>,
-    output: HashMap<usize, usize>,
+    bots: BTreeMap<usize, Bot>,
+    output: BTreeMap<usize, usize>,
 }
 
 impl AssemblyLine {
     fn new() -> AssemblyLine {
         AssemblyLine {
-            bots: HashMap::new(),
-            output: HashMap::new(),
+            bots: BTreeMap::new(),
+            output: BTreeMap::new(),
         }
     }
     fn run(&mut self) {
@@ -127,6 +127,10 @@ impl AssemblyLine {
                     }
                 }
             }
+        }
+        println!("Outputs:");
+        for (id, val) in &self.output {
+            println!("    {}: {}", id, val);
         }
     }
     fn transfer(&mut self, &Transfer { value, ref destination }: &Transfer) {
