@@ -171,45 +171,6 @@ impl State {
     }
 }
 
-impl std::str::FromStr for State {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let microchip_re = Regex::new(r"(?P<elem>[:alpha:]+)-compatible microchip").unwrap();
-        let rtg_re = Regex::new(r"(?P<elem>[:alpha:]+) generator").unwrap();
-        let mut elem_ids = BTreeMap::new();
-        let mut floors = vec![BTreeSet::new(); 4];
-        let mut current_id = 0;
-        let mut lines = s.lines();
-        for mut floor in &mut floors {
-            let line = match lines.next() {
-                Some(l) => l,
-                None => return Err("Not enough lines".into()),
-            };
-            for cap in microchip_re.captures_iter(line) {
-                let elem_name = &cap["elem"];
-                if !elem_ids.contains_key(elem_name) {
-                    elem_ids.insert(elem_name.to_owned(), current_id);
-                    current_id += 1;
-                }
-                floor.insert(Item::Chip(elem_ids[elem_name]));
-            }
-            for cap in rtg_re.captures_iter(line) {
-                let elem_name = &cap["elem"];
-                if !elem_ids.contains_key(elem_name) {
-                    elem_ids.insert(elem_name.to_owned(), current_id);
-                    current_id += 1;
-                }
-                floor.insert(Item::Rtg(elem_ids[elem_name]));
-            }
-        }
-        Ok(State {
-            moves: Vec::new(),
-            current_floor: 0,
-            floors: floors,
-        })
-    }
-}
-
 fn solve(begin: &State) -> Option<Vec<Move>> {
     let end = begin.end_state();
     let mut state_queue = VecDeque::new();
@@ -232,17 +193,54 @@ fn solve(begin: &State) -> Option<Vec<Move>> {
     None
 }
 
+fn parse_state(s: &str) -> Result<(State, BTreeMap<String, ElementId>), String> {
+    let microchip_re = Regex::new(r"(?P<elem>[:alpha:]+)-compatible microchip").unwrap();
+    let rtg_re = Regex::new(r"(?P<elem>[:alpha:]+) generator").unwrap();
+    let mut elem_ids = BTreeMap::new();
+    let mut floors = vec![BTreeSet::new(); 4];
+    let mut current_id = 0;
+    let mut lines = s.lines();
+    for mut floor in &mut floors {
+        let line = match lines.next() {
+            Some(l) => l,
+            None => return Err("Not enough lines".into()),
+        };
+        for cap in microchip_re.captures_iter(line) {
+            let elem_name = &cap["elem"];
+            if !elem_ids.contains_key(elem_name) {
+                elem_ids.insert(elem_name.to_owned(), current_id);
+                current_id += 1;
+            }
+            floor.insert(Item::Chip(elem_ids[elem_name]));
+        }
+        for cap in rtg_re.captures_iter(line) {
+            let elem_name = &cap["elem"];
+            if !elem_ids.contains_key(elem_name) {
+                elem_ids.insert(elem_name.to_owned(), current_id);
+                current_id += 1;
+            }
+            floor.insert(Item::Rtg(elem_ids[elem_name]));
+        }
+    }
+    Ok((State {
+        moves: Vec::new(),
+        current_floor: 0,
+        floors: floors,
+    },
+        elem_ids))
+}
+
 fn parse_args() -> std::io::Result<String> {
-    let matches = clap::App::new("Day 10")
+    let matches = clap::App::new("Day 11")
         .author("Devon Hollowood")
-        .arg(clap::Arg::with_name("instructions")
+        .arg(clap::Arg::with_name("manifest")
             .index(1)
             .short("f")
-            .long("instructions")
-            .help("instructions to run. Reads from stdin otherwise")
+            .long("manifest")
+            .help("manifest to solve. Reads from stdin otherwise")
             .takes_value(true))
         .get_matches();
-    let source = matches.value_of_os("instructions");
+    let source = matches.value_of_os("manifest");
     let mut contents = String::new();
     match source {
         Some(filename) => {
@@ -257,12 +255,63 @@ fn parse_args() -> std::io::Result<String> {
     Ok(contents)
 }
 
+fn move_string(mov: &Move, id_elems: &BTreeMap<ElementId, String>) -> String {
+    use std::fmt::Write;
+    fn item_type(item: &Item) -> &str {
+        match *item {
+            Item::Rtg(_) => "RTG",
+            Item::Chip(_) => "microchip",
+        }
+    }
+    let mut s = String::new();
+    write!(s,
+           "Move {} {} ",
+           id_elems[&mov.item1.element_id()],
+           item_type(&mov.item1))
+        .unwrap();
+    if let Some(item) = mov.item2 {
+        write!(s,
+               "and {} {} ",
+               id_elems[&item.element_id()],
+               item_type(&item))
+            .unwrap();
+    }
+    write!(s,
+           "{}",
+           match mov.direction {
+               Direction::Up => "up",
+               Direction::Down => "down",
+           })
+        .unwrap();
+    s
+}
+
 fn main() {
     let input = parse_args().unwrap_or_else(|err| panic!("Error reading input: {}", err));
-    let begin: State = input.parse().unwrap_or_else(|err| panic!("Error parsing input: {}", err));
-    match solve(&begin) {
-        Some(moves) => println!("{}", moves.len()),
-        None => println!("No solution found!"),
+    let (begin1, mut elem_ids) = parse_state(&input)
+        .unwrap_or_else(|err| panic!("Error parsing input: {}", err));
+    let next_id = elem_ids.values().cloned().max().unwrap_or_default() + 1;
+    elem_ids.insert("elerium".to_owned(), next_id);
+    elem_ids.insert("dilithium".to_owned(), next_id + 1);
+    let id_elems = elem_ids.into_iter().map(|(elem, id)| (id, elem)).collect();
+    let mut begin2 = begin1.clone();
+    begin2.floors[BOTTOM_FLOOR].extend(vec![Item::Rtg(next_id),
+                                            Item::Chip(next_id),
+                                            Item::Rtg(next_id + 1),
+                                            Item::Chip(next_id + 1)]);
+    let puzzles = [begin1, begin2];
+    for puzzle_num in 1..puzzles.len() + 1 {
+        match solve(&puzzles[puzzle_num - 1]) {
+            Some(moves) => {
+                println!("Part {} solution:", puzzle_num);
+                for mov in &moves {
+                    println!("{}", move_string(&mov, &id_elems));
+                }
+                println!("Number of moves (part {}): {}", puzzle_num, moves.len());
+            }
+            None => println!("No part {} solution found!", puzzle_num),
+        }
+        println!();
     }
 }
 
