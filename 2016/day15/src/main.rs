@@ -28,7 +28,9 @@ impl std::str::FromStr for Disk {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         lazy_static! {
             static ref DISK_RE: Regex =
-                Regex::new(r"Disc #\d+ has (\d+) positions; at time=0, it is at position (\d+).").unwrap();
+                Regex::new(
+                    r"Disc #\d+ has (\d+) positions; at time=0, it is at position (\d+).")
+                .unwrap();
         }
         if let Some(cap) = DISK_RE.captures(s) {
             Ok(Disk {
@@ -96,11 +98,16 @@ fn parse_args() -> std::io::Result<String> {
 
 fn main() {
     let input = parse_args().unwrap_or_else(|err| panic!("Error reading args: {}", err));
-    let disks: Vec<Disk> = input.lines()
+    let mut disks: Vec<Disk> = input.lines()
         .map(|line| line.trim().parse())
         .collect::<Result<_, _>>()
         .unwrap_or_else(|err| panic!("Error parsing disks: {}", err));
-    println!("part 1 solution: drop at t = {} seconds", solve(&disks))
+    println!("part 1 solution: drop at t = {} seconds", solve(&disks));
+    disks.push(Disk {
+        n_positions: 11,
+        initial: 0,
+    });
+    println!("part 2 solution: drop at t = {} seconds", solve(&disks));
 }
 
 #[cfg(test)]
