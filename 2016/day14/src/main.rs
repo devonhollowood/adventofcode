@@ -73,7 +73,7 @@ fn generate_keys<F>(salt: &[u8], n_keys: usize, hasher: F) -> Vec<(Idx, Key)>
             let (cand_idx, _, key) = candidates.pop_front().expect("`candidates` was empty");
             keys.push((cand_idx, key));
             print!("(Generated {})\r", keys.len());
-            std::io::stdout().flush();
+            let _ = std::io::stdout().flush();
             if keys.len() >= n_keys {
                 return keys;
             }
