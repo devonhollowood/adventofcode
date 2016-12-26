@@ -128,10 +128,13 @@ fn parse_args() -> std::io::Result<String> {
 
 fn main() {
     let input = parse_args().unwrap_or_else(|err| panic!("Error reading args: {}", err));
-    let instructions: Vec<_> = input.lines()
+    let mut instructions: Vec<_> = input.lines()
         .map(|line| line.trim().parse())
         .collect::<Result<_, _>>()
         .unwrap_or_else(|err| panic!("Error parsing instructions: {}", err));
-    let final_state = compute(&instructions);
-    println!("part 1 final state: {:?}", final_state);
+    let final_state_1 = compute(&instructions);
+    println!("part 1 final state: {:?}", final_state_1);
+    instructions.insert(0, Instruction::Cpy(Value::Lit(1), 2));
+    let final_state_2 = compute(&instructions);
+    println!("part 2 final state: {:?}", final_state_2);
 }
