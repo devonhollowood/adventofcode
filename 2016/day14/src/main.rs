@@ -23,6 +23,15 @@ fn md5(input: &[u8], mut output: &mut String) {
     write_hex(&output_buf, &mut output);
 }
 
+fn stretched_md5(input: &[u8], output: &mut String) {
+    let mut input_buf = input.to_vec();
+    for _ in 0..2017 {
+        md5(&input_buf, output);
+        input_buf.clear();
+        input_buf.extend(output.as_bytes());
+    }
+}
+
 fn runs(input: &str, len: usize) -> Vec<char> {
     let mut current = None;
     let mut run = 1;
@@ -43,7 +52,9 @@ fn runs(input: &str, len: usize) -> Vec<char> {
     runs
 }
 
-fn generate_keys(salt: &[u8], n_keys: usize) -> Vec<(Idx, Key)> {
+fn generate_keys<F>(salt: &[u8], n_keys: usize, hasher: F) -> Vec<(Idx, Key)>
+    where F: Fn(&[u8], &mut String)
+{
     use std::io::Write;
     let mut keys = Vec::new();
     let mut candidates: VecDeque<(Idx, char, Key)> = VecDeque::new();
@@ -61,6 +72,8 @@ fn generate_keys(salt: &[u8], n_keys: usize) -> Vec<(Idx, Key)> {
             .unwrap_or_default() {
             let (cand_idx, _, key) = candidates.pop_front().expect("`candidates` was empty");
             keys.push((cand_idx, key));
+            print!("(Generated {})\r", keys.len());
+            std::io::stdout().flush();
             if keys.len() >= n_keys {
                 return keys;
             }
@@ -68,7 +81,7 @@ fn generate_keys(salt: &[u8], n_keys: usize) -> Vec<(Idx, Key)> {
         // create new key
         input_buf.truncate(salt.len());
         write!(input_buf, "{}", idx).expect("Could not write to buffer");
-        md5(&input_buf, &mut key_buf);
+        hasher(&input_buf, &mut key_buf);
         // handle runs of 5
         for ch in runs(&key_buf, 5) {
             // mark validated candidates
@@ -102,8 +115,13 @@ fn parse_args() -> String {
 
 fn main() {
     let salt = parse_args();
-    println!("Generating keys...");
-    for (idx, key) in generate_keys(salt.as_bytes(), 64) {
+    println!("Generating part 1 keys...");
+    for (idx, key) in generate_keys(salt.as_bytes(), 64, md5) {
+        println!("Key at idx {}: {}", idx, key);
+    }
+    println!();
+    println!("Generating part 2 keys...");
+    for (idx, key) in generate_keys(salt.as_bytes(), 64, stretched_md5) {
         println!("Key at idx {}: {}", idx, key);
     }
 }
@@ -114,10 +132,17 @@ mod tests {
 
     #[test]
     fn example_keyset() {
-        let keys = generate_keys(b"abc", 2);
+        let keys = generate_keys(b"abc", 2, md5);
         println!("Got keys: {:?}", keys);
         assert_eq!(keys[0].0, 39);
         assert_eq!(keys[1].0, 92);
         // assert_eq!(keys[63].0, 22728);
+    }
+
+    #[test]
+    fn stretched_hash() {
+        let mut key_buf = String::with_capacity(Md5::output_bytes() * 2);
+        stretched_md5(b"abc0", &mut key_buf);
+        assert!(key_buf.starts_with("a107ff"));
     }
 }
