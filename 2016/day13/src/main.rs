@@ -56,6 +56,25 @@ fn shortest_path(start: Point, end: Point, key: usize) -> Option<Vec<Point>> {
     None
 }
 
+fn within_range(start: Point, limit: usize, key: usize) -> BTreeSet<Point> {
+    let mut move_queue = VecDeque::new();
+    move_queue.push_back((start, 0));
+    let mut visited = BTreeSet::new();
+    while let Some((pos, dist)) = move_queue.pop_front() {
+        if dist == limit {
+            continue;
+        }
+        for mov in possible_moves(pos, key) {
+            if visited.contains(&mov) {
+                continue;
+            }
+            visited.insert(mov);
+            move_queue.push_back((mov, dist + 1));
+        }
+    }
+    visited
+}
+
 fn parse_args() -> std::io::Result<usize> {
     let matches = clap::App::new("Day 13")
         .author("Devon Hollowood")
@@ -85,6 +104,8 @@ fn main() {
         }
         None => println!("No path found!"),
     }
+    let within_50 = within_range(Point { x: 1, y: 1 }, 50, key);
+    println!("Part 2: moves within 50 steps: {}", within_50.len())
 }
 
 #[cfg(test)]
