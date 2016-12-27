@@ -77,8 +77,10 @@ fn parse_args() -> Result<Bits, String> {
 
 fn main() {
     let initial_state = parse_args().expect("Invalid initial state!");
-    let checksum = checksum(&run_dragon_curve(initial_state, 272));
-    println!("checksum: {}", checksum);
+    let checksum1 = checksum(&run_dragon_curve(initial_state.clone(), 272));
+    println!("part 1 checksum: {}", checksum1);
+    let checksum2 = checksum(&run_dragon_curve(initial_state, 35651584));
+    println!("part 2 checksum: {}", checksum2);
 }
 
 #[cfg(test)]
