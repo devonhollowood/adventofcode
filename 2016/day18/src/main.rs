@@ -93,14 +93,24 @@ fn parse_args() -> Result<(Row, bool), String> {
 fn main() {
     let (initial, show) = parse_args()
         .unwrap_or_else(|e| panic!("Error parsing initial row: {}", e));
-    let room = initial.generate_rows(40);
+    let room = initial.clone().generate_rows(40);
     if show {
         for row in &room {
             println!("{}", row);
         }
     }
-    let n_safe = room.iter().flat_map(|row| row.tiles.iter()).filter(|t| t.is_safe()).count();
-    println!("Number of safe tiles: {}", n_safe);
+    let n_safe_40 = room.iter().flat_map(|row| row.tiles.iter()).filter(|t| t.is_safe()).count();
+    println!("Number of safe tiles in 40 rows: {}", n_safe_40);
+    let n_safe_400000 = itertools::iterate(initial, |row| row.next_row())
+        .take(400000)
+        .fold(0, |count, row| {
+            count +
+            row.tiles
+                .iter()
+                .filter(|tile| tile.is_safe())
+                .count()
+        });
+    println!("Number of safe tiles in 400000 rows: {}", n_safe_400000);
 }
 
 #[cfg(test)]
