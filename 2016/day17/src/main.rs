@@ -130,6 +130,26 @@ fn shortest_path(start: Point, end: Point, key: &str) -> Option<Vec<Move>> {
     None
 }
 
+fn longest_path(start: Point, end: Point, key: &str) -> Option<Vec<Move>> {
+    let mut move_queue = VecDeque::new();
+    move_queue.push_back((start, Vec::new()));
+    let mut successful_paths = Vec::new();
+    while let Some((pos, moves)) = move_queue.pop_front() {
+        for mov in possible_moves(pos, &moves, key) {
+            let mut new_moves = moves.clone();
+            new_moves.push(mov);
+            let new_pos = pos.make_move(mov);
+            if new_pos == end {
+                successful_paths.push(new_moves);
+            } else {
+                move_queue.push_back((new_pos, new_moves));
+            }
+        }
+    }
+    successful_paths.sort_by_key(|path| path.len());
+    successful_paths.pop()
+}
+
 fn parse_args() -> String {
     let matches = clap::App::new("Day 17")
         .author("Devon Hollowood")
@@ -144,13 +164,24 @@ fn parse_args() -> String {
 
 fn main() {
     let key = parse_args();
-    println!("part 1 path:");
+    println!("shortest path:");
     match shortest_path(Point::new(0, 0), Point::new(3, 3), &key) {
         Some(path) => {
             for mov in &path {
                 print!("{}", mov.as_char());
             }
             println!();
+        }
+        None => println!("No path found!"),
+    }
+    println!("longest path:");
+    match longest_path(Point::new(0, 0), Point::new(3, 3), &key) {
+        Some(path) => {
+            for mov in &path {
+                print!("{}", mov.as_char());
+            }
+            println!();
+            println!("length: {}", path.len());
         }
         None => println!("No path found!"),
     }
@@ -184,20 +215,35 @@ mod tests {
     }
 
     #[test]
-    fn example1() {
+    fn short_path_example_1() {
         assert_eq!(shortest_path(START, END, "ihgpwlah"),
                    Some(read_moves("DDRRRD")));
     }
 
     #[test]
-    fn example2() {
+    fn short_path_example_2() {
         assert_eq!(shortest_path(START, END, "kglvqrro"),
                    Some(read_moves("DDUDRLRRUDRD")));
     }
 
     #[test]
-    fn example3() {
+    fn short_path_example_3() {
         assert_eq!(shortest_path(START, END, "ulqzkmiv"),
                    Some(read_moves("DRURDRUDDLLDLUURRDULRLDUUDDDRR")));
+    }
+
+    #[test]
+    fn long_path_example_1() {
+        assert_eq!(longest_path(START, END, "ihgpwlah").unwrap().len(), 370);
+    }
+
+    #[test]
+    fn long_path_example_2() {
+        assert_eq!(longest_path(START, END, "kglvqrro").unwrap().len(), 492);
+    }
+
+    #[test]
+    fn long_path_example_3() {
+        assert_eq!(longest_path(START, END, "ulqzkmiv").unwrap().len(), 830);
     }
 }
