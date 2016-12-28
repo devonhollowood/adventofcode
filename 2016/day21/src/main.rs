@@ -8,7 +8,7 @@ use std::io::prelude::*;
 use std::fs::File;
 use regex::Regex;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Password {
     chars: Vec<u8>,
 }
@@ -66,6 +66,60 @@ impl Password {
                     rotate_right(&mut self.chars[n..m + 1], 1);
                 }
             }
+        }
+    }
+    fn unscramble(&mut self, instruction: &Instruction) {
+        use Instruction::*;
+        match *instruction {
+            SwapPos(m, n) => self.chars.swap(m, n),
+            SwapLet(a, b) => self.scramble(&SwapLet(b, a)),
+            RotLeft(amt) => rotate_right(&mut self.chars, amt),
+            RotRight(amt) => rotate_left(&mut self.chars, amt),
+            RotLet(ch) => {
+                let len = self.chars.len();
+                // the strategy here is to keep looking through all
+                // occurrences of `ch`, finding the occurrence which,
+                // when unshifted, becomes the first occurrence of `ch`
+                'search: for idx in 0..len {
+                    if self.chars[idx] != ch {
+                        continue;
+                    }
+                    // if original idx was `i`, it is currently at
+                    // ((2 * `i` + 1) % len) (plus one if `i` >= 4)
+                    // Can't do discrete division, so let's just brute force
+                    let mut orig_idx = 0;
+                    while orig_idx < len - 1 {
+                        if (2 * orig_idx + 1 + if orig_idx >= 4 { 1 } else { 0 }) % len == idx {
+                            break;
+                        }
+                        orig_idx += 1;
+                    }
+                    // such edge cases, wow!
+                    if idx >= orig_idx {
+                        rotate_left(&mut self.chars, idx - orig_idx);
+                        for other_idx in 0..orig_idx {
+                            if self.chars[other_idx] == ch {
+                                // whoops, wrong one, rotate back
+                                rotate_right(&mut self.chars, idx - orig_idx);
+                                continue 'search;
+                            }
+                        }
+                    } else {
+                        rotate_right(&mut self.chars, orig_idx - idx);
+                        for other_idx in 0..orig_idx {
+                            if self.chars[other_idx] == ch {
+                                // whoops, wrong one, rotate back
+                                rotate_left(&mut self.chars, idx - orig_idx);
+                                continue 'search;
+                            }
+                        }
+                    }
+                    // hey, we fixed it!
+                    break;
+                }
+            }
+            RevPos(m, n) => self.scramble(&RevPos(m, n)),
+            Mov(m, n) => self.scramble(&Mov(n, m)),
         }
     }
 }
@@ -155,9 +209,7 @@ fn gcd(mut a: usize, mut b: usize) -> usize {
 
 fn rotate_left<T: Clone + std::fmt::Display>(slice: &mut [T], amount: usize) {
     let len = slice.len();
-    let amount = amount % len; // normalize
-    let shift = gcd(len, amount);
-    for start_idx in 0..shift {
+    for start_idx in 0..gcd(len, amount) {
         let temp = slice[start_idx].clone();
         let mut to = start_idx;
         let mut from = (to + amount) % len;
@@ -173,8 +225,7 @@ fn rotate_left<T: Clone + std::fmt::Display>(slice: &mut [T], amount: usize) {
 fn rotate_right<T: Clone>(slice: &mut [T], amount: usize) {
     let len = slice.len();
     let amount = amount % len; // normalize
-    let shift = gcd(len, amount);
-    for start_idx in 0..shift {
+    for start_idx in 0..gcd(len, amount) {
         let temp = slice[start_idx].clone();
         let mut to = start_idx;
         let mut from = (len + to - amount) % len;
@@ -216,10 +267,15 @@ fn main() {
         .collect::<Result<_, _>>()
         .unwrap_or_else(|err| panic!("Error parsing ranges: {}", err));
     let mut password = "abcdefgh".parse::<Password>().unwrap();
-    for instruction in instructions {
-        password.scramble(&instruction);
+    for instruction in &instructions {
+        password.scramble(instruction);
     }
-    println!("Scramble: {}", password);
+    println!("Part 1 scramble: {}", password);
+    let mut scrambled = "fbgdceah".parse::<Password>().unwrap();
+    for instruction in instructions.iter().rev() {
+        scrambled.unscramble(instruction);
+    }
+    println!("Part 1 password: {}", scrambled);
 }
 
 #[cfg(test)]
@@ -227,7 +283,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn example() {
+    fn example_scramble() {
         let mut password = "abcde".parse::<Password>().unwrap();
         let instructions: Vec<_> = ["swap position 4 with position 0",
                                     "swap letter d with letter b",
@@ -244,5 +300,19 @@ mod tests {
             password.scramble(&instruction);
         }
         assert_eq!(std::str::from_utf8(&password.chars), Ok("decab"));
+    }
+
+    #[test]
+    fn unrotlet_edge_cases() {
+        use Instruction::*;
+        for test in ["abcdef", "bcdefa", "ijklabcdefgh"]
+            .iter()
+            .map(|s| s.parse().unwrap())
+            .collect::<Vec<Password>>() {
+            let mut guinea_pig = test.clone();
+            guinea_pig.scramble(&RotLet(b'a'));
+            guinea_pig.unscramble(&RotLet(b'a'));
+            assert_eq!(guinea_pig, test);
+        }
     }
 }
