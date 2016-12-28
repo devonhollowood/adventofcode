@@ -18,8 +18,52 @@ struct IPRange {
 }
 
 impl IPRange {
+    fn new(low: IP, high: IP) -> IPRange {
+        IPRange {
+            low: low,
+            high: high,
+        }
+    }
+    fn full() -> IPRange {
+        IPRange {
+            low: 0,
+            high: IP::max_value(),
+        }
+    }
     fn contains(&self, ip: IP) -> bool {
         self.low <= ip && ip <= self.high
+    }
+    fn minimum_valid(&self, forbidden: &BTreeSet<IPRange>) -> Option<IP> {
+        let mut ip = self.low;
+        for range in forbidden.iter() {
+            if range.contains(ip) {
+                if range.high < self.high {
+                    ip = range.high + 1;
+                } else {
+                    return None;
+                }
+            }
+        }
+        Some(ip)
+    }
+
+    fn number_allowed(&self, forbidden: &BTreeSet<IPRange>) -> u32 {
+        let mut ip = self.low;
+        let mut count = 0;
+        for range in forbidden.iter() {
+            if ip < range.low {
+                count += range.low - ip;
+            }
+            if ip <= range.high {
+                if range.high >= self.high {
+                    return count;
+                } else {
+                    ip = range.high + 1;
+                }
+            }
+        }
+        count += self.high - ip + 1; // count last one, too
+        count
     }
 }
 
@@ -69,15 +113,6 @@ fn parse_args() -> std::io::Result<String> {
     Ok(contents)
 }
 
-fn minimum_valid(forbidden: &BTreeSet<IPRange>) -> IP {
-    let mut ip = 0;
-    for range in forbidden.iter() {
-        if range.contains(ip) {
-            ip = range.high + 1;
-        }
-    }
-    ip
-}
 
 fn main() {
     let input = parse_args().unwrap_or_else(|err| panic!("Error reading args: {}", err));
@@ -85,7 +120,12 @@ fn main() {
         .map(|line| line.trim().parse())
         .collect::<Result<_, _>>()
         .unwrap_or_else(|err| panic!("Error parsing ranges: {}", err));
-    println!("minimum valid IP: {}", minimum_valid(&forbidden));
+    let range = IPRange::full();
+    match range.minimum_valid(&forbidden) {
+        Some(ip) => println!("minimum valid IP: {}", ip),
+        None => println!("No valid IPs found!"),
+    }
+    println!("number of valid IPs: {}", range.number_allowed(&forbidden));
 }
 
 #[cfg(test)]
@@ -93,8 +133,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn example() {
-        let ranges = ["5-8", "0-2", "4-7"].iter().map(|r| r.parse().unwrap()).collect();
-        assert_eq!(minimum_valid(&ranges), 3);
+    fn min_valid_example() {
+        let forbidden = ["5-8", "0-2", "4-7"].iter().map(|r| r.parse().unwrap()).collect();
+        assert_eq!(IPRange::new(0, 10).minimum_valid(&forbidden), Some(3));
+    }
+
+    #[test]
+    fn num_allowed_example() {
+        let forbidden = ["5-8", "0-2", "4-7"].iter().map(|r| r.parse().unwrap()).collect();
+        assert_eq!(IPRange::new(0, 10).number_allowed(&forbidden), 2);
+    }
+
+    #[test]
+    fn num_allowed_complex() {
+        let forbidden = ["3-5", "2-6", "8-10", "9-11"]
+            .iter()
+            .map(|r| r.parse().unwrap())
+            .collect();
+        assert_eq!(IPRange::new(0, 12).number_allowed(&forbidden), 4);
     }
 }
