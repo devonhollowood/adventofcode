@@ -7,7 +7,7 @@ extern crate lazy_static;
 use std::io::prelude::*;
 use std::fs::File;
 use regex::Regex;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct Position {
@@ -17,7 +17,7 @@ struct Position {
 
 impl std::fmt::Display for Position {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        write!(f, "node-y{}-x{}", self.y, self.x)
+        write!(f, "node-x{}-y{}", self.x, self.y)
     }
 }
 
@@ -87,18 +87,13 @@ fn valid_pairs(nodes: &HashMap<Position, NodeInfo>) -> Vec<(Position, Position)>
     pairs
 }
 
-fn possible_moves(nodes: &HashMap<Position, NodeInfo>) -> Vec<(Position, Position)> {
-    let mut possibilities = Vec::new();
-    for (&pos_a, ref info_a) in nodes.iter() {
-        if info_a.used == 0 {
-            // no point in moving no data
-            continue;
-        }
-        for pos_b in pos_a.neighbors() {
-            if let Some(info_b) = nodes.get(&pos_b) {
-                if info_a.used <= info_b.avail {
-                    possibilities.push((pos_a, pos_b));
-                }
+fn possible_moves(nodes: &HashMap<Position, NodeInfo>, hole: Position) -> Vec<Position> {
+    let mut possibilities = Vec::with_capacity(4);
+    let avail = nodes[&hole].avail;
+    for pos in hole.neighbors() {
+        if let Some(from_info) = nodes.get(&pos) {
+            if from_info.used <= avail {
+                possibilities.push(pos);
             }
         }
     }
@@ -127,30 +122,56 @@ fn move_data(nodes: &mut HashMap<Position, NodeInfo>, from: Position, to: Positi
     from_info_mut.used = 0;
 }
 
-fn solve(nodes: &HashMap<Position, NodeInfo>) -> Option<Vec<(Position, Position)>> {
+fn make_moves(mut nodes: &mut HashMap<Position, NodeInfo>,
+              initial_hole: Position,
+              moves: &[Position])
+              -> Position {
+    let mut hole = initial_hole;
+    for mov in moves.iter() {
+        move_data(&mut nodes, *mov, hole);
+        hole = *mov;
+    }
+    hole
+}
+
+fn solve(nodes: &HashMap<Position, NodeInfo>) -> Option<Vec<Position>> {
     let mut state_queue = VecDeque::new();
     let initial_target_loc = nodes.keys()
         .filter(|pos| pos.y == 0)
         .max_by_key(|pos| pos.x)
         .expect("Invalid target state")
         .clone();
-    state_queue.push_back((nodes.clone(), initial_target_loc, Vec::new()));
-    while let Some((state, target_loc, moves)) = state_queue.pop_front() {
-        // print!("considering target = {} moves = [", target_loc);
-        // for &(from, to) in &moves {
-        //    print!("{} -> {}, ", from, to);
-        // }
-        // println!("] ({} moves from here.)", possible_moves(&state).len());
-        for (from, to) in possible_moves(&state) {
+    let mut initial_holes: Vec<_> = nodes.iter()
+        .filter(|&(_, info)| info.used == 0)
+        .map(|(pos, _)| *pos)
+        .collect();
+    if initial_holes.len() != 1 {
+        panic!("sorry, consult a better path-finding algorithm =p");
+    }
+    let initial_hole = initial_holes.pop().unwrap();
+    let mut visited = HashSet::new();
+    visited.insert((initial_hole, initial_target_loc));
+    state_queue.push_back((initial_target_loc, Vec::new()));
+    while let Some((target_loc, moves)) = state_queue.pop_front() {
+        let mut state = nodes.clone();
+        let old_hole = make_moves(&mut state, initial_hole, &moves);
+        for from in possible_moves(&state, old_hole) {
             let mut new_state = state.clone();
+            move_data(&mut new_state, from, old_hole);
             let mut new_moves = moves.clone();
-            new_moves.push((from, to));
-            move_data(&mut new_state, from, to);
-            let new_target_loc = if from == target_loc { to } else { target_loc };
+            new_moves.push(from);
+            let new_target_loc = if from == target_loc {
+                old_hole
+            } else {
+                target_loc
+            };
             if new_target_loc.x == 0 && new_target_loc.y == 0 {
                 return Some(new_moves);
             }
-            state_queue.push_back((new_state, new_target_loc, new_moves));
+            if !visited.contains(&(from, new_target_loc)) {
+                visited.insert((from, new_target_loc));
+                state_queue.push_back((new_target_loc, new_moves));
+            }
         }
     }
     None
@@ -187,9 +208,18 @@ fn main() {
         .collect();
     println!("number of valid node pairs: {}", valid_pairs(&nodes).len());
     if let Some(solution) = solve(&nodes) {
+        let mut initial_holes: Vec<_> = nodes.iter()
+            .filter(|&(_, info)| info.used == 0)
+            .map(|(pos, _)| *pos)
+            .collect();
+        if initial_holes.len() != 1 {
+            panic!("sorry, consult a better path-finding algorithm =p");
+        }
+        let initial_hole = initial_holes.pop().unwrap();
         println!("Solution:");
+        println!("{}", initial_hole);
         for mov in &solution {
-            println!("{} -> {}", mov.0, mov.1);
+            println!("-> {}", mov);
         }
         println!("Total moves taken: {}", solution.len())
     }
