@@ -161,6 +161,9 @@ fn main() {
     instructions.insert(0, Instruction::Cpy(Value::Lit(7), Value::Reg(0)));
     let final_state_1 = compute(&instructions);
     println!("part 1 final state: {:?}", final_state_1);
+    instructions[0] = Instruction::Cpy(Value::Lit(12), Value::Reg(0));
+    let final_state_2 = compute(&instructions);
+    println!("part 2 final state: {:?}", final_state_2);
 }
 
 #[cfg(test)]
