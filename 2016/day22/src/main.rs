@@ -77,8 +77,8 @@ impl std::str::FromStr for NodeListing {
 
 fn valid_pairs(nodes: &HashMap<Position, NodeInfo>) -> Vec<(Position, Position)> {
     let mut pairs = Vec::new();
-    for (&pos_a, ref info_a) in nodes.iter() {
-        for (&pos_b, ref info_b) in nodes.iter() {
+    for (&pos_a, info_a) in nodes.iter() {
+        for (&pos_b, info_b) in nodes.iter() {
             if info_a.used != 0 && pos_a != pos_b && info_a.used <= info_b.avail {
                 pairs.push((pos_a, pos_b));
             }
@@ -136,11 +136,10 @@ fn make_moves(mut nodes: &mut HashMap<Position, NodeInfo>,
 
 fn solve(nodes: &HashMap<Position, NodeInfo>) -> Option<Vec<Position>> {
     let mut state_queue = VecDeque::new();
-    let initial_target_loc = nodes.keys()
+    let initial_target_loc = *nodes.keys()
         .filter(|pos| pos.y == 0)
         .max_by_key(|pos| pos.x)
-        .expect("Invalid target state")
-        .clone();
+        .expect("Invalid target state");
     let mut initial_holes: Vec<_> = nodes.iter()
         .filter(|&(_, info)| info.used == 0)
         .map(|(pos, _)| *pos)
