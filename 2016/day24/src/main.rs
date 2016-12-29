@@ -1,12 +1,14 @@
 extern crate clap;
+extern crate revord;
 
+use revord::RevOrd;
 use std::io::prelude::*;
 use std::fs::File;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, BinaryHeap};
 
 type Distance = usize;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct Point {
     x: usize,
     y: usize,
@@ -83,8 +85,8 @@ impl Map {
         Some((current, dist))
     }
     fn interesting_points(&self) -> InterestingPointGraph {
-        let mut ips = HashMap::new();
-        let mut types = HashMap::new();
+        let mut ips = BTreeMap::new();
+        let mut types = BTreeMap::new();
         for y in 0..self.elements.len() {
             for x in 0..self.elements[0].len() {
                 let point = Point { x: x, y: y };
@@ -94,11 +96,15 @@ impl Map {
                         Element::Goal(n) => InterestingPoint::Goal(n),
                         _ => panic!("Thought a wall was interesting"),
                     };
-                    let connections = self.possible_moves(point)
+                    let mut connections = BTreeMap::new();
+                    for (ip, dist) in self.possible_moves(point)
                         .into_iter()
                         .map(|mov| self.walk_to_interesting_point(point, mov))
-                        .filter_map(|o| o)
-                        .collect::<HashMap<_, _>>();
+                        .filter_map(|o| o) {
+                        if !connections.contains_key(&ip) || connections[&ip] > dist {
+                            connections.insert(ip, dist);
+                        }
+                    }
                     if !connections.is_empty() {
                         ips.insert(point, connections);
                         types.insert(point, kind);
@@ -129,7 +135,7 @@ impl Map {
 impl std::ops::Index<Point> for Map {
     type Output = Element;
     fn index(&self, Point { x, y }: Point) -> &Self::Output {
-        &self.elements[x][y]
+        &self.elements[y][x]
     }
 }
 
@@ -157,16 +163,68 @@ enum InterestingPoint {
 
 #[derive(Debug, Clone)]
 struct InterestingPointGraph {
-    points: HashMap<Point, HashMap<Point, Distance>>,
-    types: HashMap<Point, InterestingPoint>,
+    points: BTreeMap<Point, BTreeMap<Point, Distance>>,
+    types: BTreeMap<Point, InterestingPoint>,
 }
 
 impl InterestingPointGraph {
     fn start(&self) -> Point {
-        unimplemented!()
+        self.types
+            .iter()
+            .filter_map(|(point, elem)| match *elem {
+                InterestingPoint::Goal(0) => Some(*point),
+                _ => None,
+            })
+            .next()
+            .expect("Interesting Point Graph had no start!")
     }
-    fn solve(&self) -> Vec<(Point, Distance)> {
-        unimplemented!()
+    fn goals(&self) -> BTreeSet<usize> {
+        self.types
+            .values()
+            .filter_map(|ip| match *ip {
+                InterestingPoint::Goal(num) => Some(num),
+                InterestingPoint::Intersection => None,
+            })
+            .collect()
+    }
+    fn solve(&self) -> Option<Vec<(Point, Distance)>> {
+        let start = self.start();
+        let goals = self.goals();
+        let mut visited = BTreeSet::new();
+        let mut queue = BinaryHeap::new();
+        let initial_obtained: BTreeSet<usize> = std::iter::once(0).collect();
+        let mut best = initial_obtained.clone(); // DEBUG
+        visited.insert((start, initial_obtained.clone()));
+        queue.push((RevOrd(0), start, initial_obtained, Vec::new()));
+        while let Some((RevOrd(dist_so_far), point, obtained, moves)) = queue.pop() {
+            // println!("Considering: {}, {}, {:?}, {:?}",
+            //         dist_so_far,
+            //         point,
+            //         obtained,
+            //         moves);
+            for (ip, next_dist) in self.points[&point].iter() {
+                let total_dist = dist_so_far + next_dist;
+                // println!("Neighbor: {}, {}", ip, next_dist);
+                let mut new_moves = moves.clone();
+                new_moves.push((*ip, *next_dist));
+                let mut new_obtained = obtained.clone();
+                if let InterestingPoint::Goal(n) = self.types[ip] {
+                    new_obtained.insert(n);
+                    if new_obtained == goals {
+                        return Some(new_moves);
+                    }
+                    if new_obtained.len() > best.len() {
+                        best = new_obtained.clone();
+                        println!("new best: {:?}", best);
+                    }
+                }
+                if !visited.contains(&(*ip, new_obtained.clone())) {
+                    visited.insert((*ip, new_obtained.clone()));
+                    queue.push((RevOrd(total_dist), *ip, new_obtained, new_moves));
+                }
+            }
+        }
+        None
     }
 }
 
@@ -198,7 +256,7 @@ fn main() {
     let ips = map.interesting_points();
     let mut total_dist = 0;
     println!("{}", ips.start());
-    for (mov, dist) in ips.solve() {
+    for (mov, dist) in ips.solve().expect("No solution found!") {
         total_dist += dist;
         println!(" -> {}", mov);
     }
@@ -215,7 +273,10 @@ mod tests {
             .parse::<Map>()
             .unwrap();
         let ips = map.interesting_points();
-        assert_eq!(ips.solve().into_iter().fold(0, |acc, (_, dist)| acc + dist),
+        assert_eq!(ips.solve()
+                       .expect("No solution found!")
+                       .into_iter()
+                       .fold(0, |acc, (_, dist)| acc + dist),
                    14);
     }
 }
