@@ -7,6 +7,7 @@ use std::fs::File;
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap};
 
 type Distance = usize;
+type GoalNum = usize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct Point {
@@ -34,13 +35,13 @@ impl Point {
 enum Element {
     Wall,
     Open,
-    Goal(usize),
+    Goal(GoalNum),
 }
 
 impl Element {
     fn from_char(ch: char) -> Result<Element, String> {
         if let Some(digit) = ch.to_digit(10) {
-            Ok(Element::Goal(digit as usize))
+            Ok(Element::Goal(digit as GoalNum))
         } else if ch == '.' {
             Ok(Element::Open)
         } else if ch == '#' {
@@ -75,8 +76,8 @@ impl Map {
                 .into_iter()
                 .filter(|p| *p != prev)
                 .next() {
-                current = next;
                 prev = current;
+                current = next;
                 dist += 1;
             } else {
                 return None;
@@ -113,7 +114,7 @@ impl Map {
             }
         }
         InterestingPointGraph {
-            points: ips,
+            neighbors: ips,
             types: types,
         }
     }
@@ -158,73 +159,92 @@ impl std::str::FromStr for Map {
 #[derive(Debug, Clone, Copy)]
 enum InterestingPoint {
     Intersection,
-    Goal(usize),
+    Goal(GoalNum),
 }
 
 #[derive(Debug, Clone)]
 struct InterestingPointGraph {
-    points: BTreeMap<Point, BTreeMap<Point, Distance>>,
+    neighbors: BTreeMap<Point, BTreeMap<Point, Distance>>,
     types: BTreeMap<Point, InterestingPoint>,
 }
 
 impl InterestingPointGraph {
-    fn start(&self) -> Point {
+    fn goals(&self) -> BTreeMap<Point, GoalNum> {
         self.types
             .iter()
-            .filter_map(|(point, elem)| match *elem {
-                InterestingPoint::Goal(0) => Some(*point),
-                _ => None,
-            })
-            .next()
-            .expect("Interesting Point Graph had no start!")
-    }
-    fn goals(&self) -> BTreeSet<usize> {
-        self.types
-            .values()
-            .filter_map(|ip| match *ip {
-                InterestingPoint::Goal(num) => Some(num),
+            .filter_map(|(point, ip)| match *ip {
+                InterestingPoint::Goal(num) => Some((*point, num)),
                 InterestingPoint::Intersection => None,
             })
             .collect()
     }
-    fn solve(&self) -> Option<Vec<(Point, Distance)>> {
-        let start = self.start();
-        let goals = self.goals();
+    fn goal_graph(&self) -> GoalGraph {
+        GoalGraph {
+            goals: self.goals()
+                .into_iter()
+                .map(|(point, num)| (num, self.shortest_dist_to_goals(point)))
+                .collect(),
+        }
+    }
+    fn shortest_dist_to_goals(&self, start: Point) -> BTreeMap<GoalNum, Distance> {
+        let mut goals = BTreeMap::new();
         let mut visited = BTreeSet::new();
         let mut queue = BinaryHeap::new();
-        let initial_obtained: BTreeSet<usize> = std::iter::once(0).collect();
-        let mut best = initial_obtained.clone(); // DEBUG
-        visited.insert((start, initial_obtained.clone()));
-        queue.push((RevOrd(0), start, initial_obtained, Vec::new()));
-        while let Some((RevOrd(dist_so_far), point, obtained, moves)) = queue.pop() {
-            // println!("Considering: {}, {}, {:?}, {:?}",
-            //         dist_so_far,
-            //         point,
-            //         obtained,
-            //         moves);
-            for (ip, next_dist) in self.points[&point].iter() {
-                let total_dist = dist_so_far + next_dist;
-                // println!("Neighbor: {}, {}", ip, next_dist);
-                let mut new_moves = moves.clone();
-                new_moves.push((*ip, *next_dist));
-                let mut new_obtained = obtained.clone();
-                if let InterestingPoint::Goal(n) = self.types[ip] {
-                    new_obtained.insert(n);
-                    if new_obtained == goals {
-                        return Some(new_moves);
-                    }
-                    if new_obtained.len() > best.len() {
-                        best = new_obtained.clone();
-                        println!("new best: {:?}", best);
-                    }
+        queue.push((RevOrd(0), start));
+        while let Some((RevOrd(dist_so_far), current_point)) = queue.pop() {
+            if visited.contains(&current_point) {
+                continue;
+            }
+            visited.insert(current_point);
+            if let InterestingPoint::Goal(n) = self.types[&current_point] {
+                if !goals.contains_key(&n) || dist_so_far < goals[&n] {
+                    goals.insert(n, dist_so_far);
                 }
-                if !visited.contains(&(*ip, new_obtained.clone())) {
-                    visited.insert((*ip, new_obtained.clone()));
-                    queue.push((RevOrd(total_dist), *ip, new_obtained, new_moves));
+            }
+            for (ip, next_dist) in self.neighbors[&current_point].iter() {
+                let total_dist = dist_so_far + next_dist;
+                if !visited.contains(ip) {
+                    queue.push((RevOrd(total_dist), *ip));
                 }
             }
         }
-        None
+        if let InterestingPoint::Goal(n) = self.types[&start] {
+            goals.remove(&n);
+        }
+        goals
+    }
+}
+
+#[derive(Debug)]
+struct GoalGraph {
+    goals: BTreeMap<GoalNum, BTreeMap<GoalNum, Distance>>,
+}
+
+impl GoalGraph {
+    fn shortest_circuit(&self) -> Distance {
+        let mut queue = BinaryHeap::new();
+        let initial_obtained: BTreeSet<GoalNum> = std::iter::once(0).collect();
+        let all_goals: BTreeSet<GoalNum> = self.goals.keys().cloned().collect();
+        let mut visited = BTreeSet::new();
+        queue.push((RevOrd(0), 0, initial_obtained));
+        while let Some((RevOrd(dist_so_far), current, obtained)) = queue.pop() {
+            if visited.contains(&(current, obtained.clone())) {
+                continue;
+            }
+            visited.insert((current, obtained.clone()));
+            if obtained == all_goals {
+                return dist_so_far;
+            }
+            for (next, next_dist) in self.goals[&current].iter() {
+                let total_dist = dist_so_far + next_dist;
+                let mut new_obtained = obtained.clone();
+                new_obtained.insert(*next);
+                if !visited.contains(&(*next, new_obtained.clone())) {
+                    queue.push((RevOrd(total_dist), *next, new_obtained));
+                }
+            }
+        }
+        panic!("Could not reach all goals!")
     }
 }
 
@@ -254,13 +274,8 @@ fn main() {
     let input = parse_args().unwrap_or_else(|err| panic!("Error reading args: {}", err));
     let map = input.parse::<Map>().unwrap_or_else(|err| panic!("Error reading map: {}", err));
     let ips = map.interesting_points();
-    let mut total_dist = 0;
-    println!("{}", ips.start());
-    for (mov, dist) in ips.solve().expect("No solution found!") {
-        total_dist += dist;
-        println!(" -> {}", mov);
-    }
-    println!("Total distance: {}", total_dist);
+    let goal_graph = ips.goal_graph();
+    println!("Part 1 total distance: {}", goal_graph.shortest_circuit());
 }
 
 #[cfg(test)]
@@ -273,10 +288,7 @@ mod tests {
             .parse::<Map>()
             .unwrap();
         let ips = map.interesting_points();
-        assert_eq!(ips.solve()
-                       .expect("No solution found!")
-                       .into_iter()
-                       .fold(0, |acc, (_, dist)| acc + dist),
-                   14);
+        let goal_graph = ips.goal_graph();
+        assert_eq!(goal_graph.shortest_circuit(), 14);
     }
 }
