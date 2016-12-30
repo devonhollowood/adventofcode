@@ -236,6 +236,9 @@ impl GoalGraph {
                 return dist_so_far;
             }
             for (next, next_dist) in self.goals[&current].iter() {
+                if obtained.contains(&next) {
+                    continue;
+                }
                 let total_dist = dist_so_far + next_dist;
                 let mut new_obtained = obtained.clone();
                 new_obtained.insert(*next);
@@ -245,6 +248,43 @@ impl GoalGraph {
             }
         }
         panic!("Could not reach all goals!")
+    }
+    fn shortest_complete_circuit(&self) -> Distance {
+        let mut queue = BinaryHeap::new();
+        let initial_obtained: BTreeSet<GoalNum> = std::iter::once(0).collect();
+        let all_goals: BTreeSet<GoalNum> = self.goals.keys().cloned().collect();
+        let mut visited = BTreeSet::new();
+        let mut best = None;
+        queue.push((RevOrd(0), 0, initial_obtained));
+        while let Some((RevOrd(dist_so_far), current, obtained)) = queue.pop() {
+            if visited.contains(&(current, obtained.clone())) {
+                continue;
+            }
+            visited.insert((current, obtained.clone()));
+            if obtained == all_goals {
+                let round_trip_dist = dist_so_far + self.goals[&current][&0];
+                match best {
+                    Some(record) => {
+                        if round_trip_dist < record {
+                            best = Some(round_trip_dist);
+                        }
+                    }
+                    None => best = Some(round_trip_dist),
+                }
+            }
+            for (next, next_dist) in self.goals[&current].iter() {
+                if obtained.contains(&next) {
+                    continue;
+                }
+                let total_dist = dist_so_far + next_dist;
+                let mut new_obtained = obtained.clone();
+                new_obtained.insert(*next);
+                if !visited.contains(&(*next, new_obtained.clone())) {
+                    queue.push((RevOrd(total_dist), *next, new_obtained));
+                }
+            }
+        }
+        return best.expect("Could not complete round trip!");
     }
 }
 
@@ -276,6 +316,8 @@ fn main() {
     let ips = map.interesting_points();
     let goal_graph = ips.goal_graph();
     println!("Part 1 total distance: {}", goal_graph.shortest_circuit());
+    println!("Part 2 total distance: {}",
+             goal_graph.shortest_complete_circuit());
 }
 
 #[cfg(test)]
@@ -290,5 +332,15 @@ mod tests {
         let ips = map.interesting_points();
         let goal_graph = ips.goal_graph();
         assert_eq!(goal_graph.shortest_circuit(), 14);
+    }
+
+    #[test]
+    fn example_round_trip() {
+        let map = "###########\n#0.1.....2#\n#.#######.#\n#4.......3#\n###########"
+            .parse::<Map>()
+            .unwrap();
+        let ips = map.interesting_points();
+        let goal_graph = ips.goal_graph();
+        assert_eq!(goal_graph.shortest_complete_circuit(), 20);
     }
 }
