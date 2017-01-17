@@ -18,9 +18,12 @@ main = sh $ do
           Left parse_err -> die $ Text.pack (Mpc.parseErrorPretty parse_err)
           Right grid -> return grid
   let final_grid = iterate nextGrid initial_grid !! n_iter
-  let n_on = length . filter isOn . Array.elems $ lights final_grid
   printf w final_grid
-  printf ("Number of \"on\" lights (Part 1): "%d%"\n") n_on
+  printf ("Number of \"on\" lights (Part 1): "%d%"\n") (gridOn final_grid)
+  let final_grid2 =
+        iterate (fixCorners . nextGrid) (fixCorners initial_grid) !! n_iter
+  printf w final_grid2
+  printf ("Number of \"on\" lights (Part 2): "%d%"\n") (gridOn final_grid2)
 
 newtype Grid = Grid {
   lights :: Array.Array (Int, Int) Light
@@ -52,6 +55,9 @@ gridWidth = (+1) . fst . snd . Array.bounds . lights
 gridHeight :: Grid -> Int
 gridHeight = (+1) . snd . snd . Array.bounds . lights
 
+gridOn :: Grid -> Int
+gridOn = length . filter isOn . Array.elems . lights
+
 at :: Grid -> (Int, Int) -> Maybe Light
 Grid{..} `at` pos
   | Array.inRange (Array.bounds lights) pos = Just $ lights Array.! pos
@@ -71,6 +77,14 @@ nextGrid grid@Grid{..} = Grid $ iemap updateLight lights
       $ [(r - 1, c - 1), (r - 1, c), (r - 1, c + 1),
          (r, c - 1),                 (r, c + 1),
          (r + 1, c - 1), (r + 1, c), (r + 1, c + 1)]
+
+fixCorners :: Grid -> Grid
+fixCorners grid =
+  let arr = lights grid
+      lastRow = gridHeight grid - 1
+      lastCol = gridWidth grid - 1
+      corners = [(0, 0), (0, lastCol), (lastRow, 0), (lastRow, lastCol)]
+  in Grid $ arr Array.// map (\pos -> (pos, On)) corners
 
 iemap :: Array.Ix i => (i -> e -> e) -> Array.Array i e -> Array.Array i e
 iemap fn arr = Array.array (Array.bounds arr) (map update $ Array.assocs arr)
