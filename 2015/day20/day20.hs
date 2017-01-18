@@ -10,8 +10,15 @@ import qualified Data.List as List
 main :: IO ()
 main = sh $ do
   input <- options "Day 20" parser
-  printf ("First house with greater than "%d%" presents: "%d%"\n") input $
-    Maybe.fromJust $ List.find ((>= input) . (* 10) . sum . factors) [1 .. ]
+  printf ("First house with greater than "%d%" presents (part 1): "%d%"\n")
+    input
+    (Maybe.fromJust $ List.find ((>= input) . (* 11) . sum . factors) [1 .. ])
+  printf ("First house with greater than "%d%" presents (part 2): "%d%"\n")
+    input
+    (Maybe.fromJust $ List.find
+      ((>= input) . (* 11) . sum . factorsWithinMultiple 50)
+      [1 .. ]
+    )
 
 factors :: Int -> [Int]
 factors = Memo.integral (go 2)
@@ -30,5 +37,9 @@ factors = Memo.integral (go 2)
       | otherwise = y : merge (x : xs) ys
     merge xs [] = xs
     merge [] ys = ys
+
+factorsWithinMultiple :: Int -> Int -> [Int]
+factorsWithinMultiple mult n =
+  map (\m -> n `div` m) $ (filter (\m -> n `rem` m == 0)) [mult, mult - 1 .. 1]
 
 parser = argInt "input" "Number of presents for which to solve"
