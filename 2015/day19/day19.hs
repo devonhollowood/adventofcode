@@ -8,10 +8,10 @@ import qualified Text.Megaparsec as Mpc
 import qualified Text.Megaparsec.Text as Mpc
 import qualified Data.Text as Text
 import qualified Data.Set as Set
-import qualified Data.Map as Map
 import qualified Data.Sequence as Seq
 import qualified Data.Maybe as Maybe
 import qualified Data.Char as Char
+import Search (dfs)
 
 main = sh $ do
   fname <- options "Day 19" parser
@@ -23,11 +23,11 @@ main = sh $ do
           Right grid -> return grid
   printf ("Number of subs (Part 1): "%d%"\n") (Set.size $ performSubs subs str)
   printf ("Number of steps from `e` to `"%s%"` (Part 2): "%s%"\n") str $
-    case bfs
-         (Set.toList . performSubs subs)
-         (== str)
+    case dfs
+         (Set.toList . performSubs (Set.map revSub subs))
+         (== "e")
          [\try -> Text.length try > Text.length str]
-         "e"
+         str
     of
       Just steps -> format d (length steps)
       Nothing -> "No path found!"
@@ -44,35 +44,8 @@ performSubs subs text = Set.unions (performSub <$> Set.toList subs)
             )
       & Set.fromList
 
-bfs :: (Ord state, Show state) =>
-  (state -> [state]) -- generate next states
-  -> (state -> Bool) -- determine if answer found
-  -> [(state -> Bool)] -- functions which prune on True
-  -> state -- initial state
-  -> Maybe [state]
-bfs next pred prunes init = reverse <$> go (Map.singleton init []) Seq.empty init
-  where
-    go visited queue current
-      | pred current = Map.lookup current visited
-      | otherwise =
-        let steps_so_far = Maybe.fromJust $ Map.lookup current visited
-            new_states =
-              Map.fromList . map (\st -> (st, st:steps_so_far)) $ next current
-            new_visited = Map.unionWith shorter visited new_states
-            new_queue =
-              queue Seq.><
-              (Seq.fromList
-               . (filter (\st -> (not $ st `Map.member` visited || any ($ st) prunes)))
-               $ Map.keys new_states
-              )
-        in pop new_queue >>= (\(x, xs) -> go new_visited xs x)
-    push elem queue = queue Seq.|> elem
-    pop queue = case Seq.viewl queue of
-      Seq.EmptyL -> Nothing
-      (x Seq.:< xs) -> Just (x, xs)
-    shorter xs ys
-      | length xs <= length ys = xs
-      | otherwise = ys
+revSub :: Substitution -> Substitution
+revSub (Substitution from to) = Substitution to from
 
 data Substitution = Substitution {
   subFrom :: Text.Text,
