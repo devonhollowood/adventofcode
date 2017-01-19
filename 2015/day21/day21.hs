@@ -10,23 +10,40 @@ import qualified Search as Search
 main :: IO ()
 main = sh $ do
   boss <- options "Day 21" parser
-  let initial_loadout = Loadout 0 Nothing Nothing Nothing
+  let minimal = Loadout 0 Nothing Nothing Nothing
   let won_fight load = battle (makePlayer load) boss == "Player"
-  steps <-
-    case Search.djikstra upgrade won_fight [] initial_loadout of
+  cheapest_steps <-
+    case Search.djikstra upgrade won_fight [] minimal of
       Just victory -> return (snd victory)
       Nothing -> die "Victory is impossible!"
-  let loadout = snd $ last steps
-  let cost = loadoutCost loadout
-  printf "Winning loadout (part 1):\n"
-  printf ("    "%s%"\n") . itemName $ weapons !! weaponIdx loadout
+  let cheapest = snd $ last cheapest_steps
+  let cheapest_cost = loadoutCost cheapest
+  printf "Cheapest winning loadout (part 1):\n"
+  printf ("    "%s%"\n") . itemName $ weapons !! weaponIdx cheapest
   printf ("    "%s%"\n") $
-    maybe "No armor" (itemName . (armors !!)) (armorIdx loadout)
+    maybe "No armor" (itemName . (armors !!)) (armorIdx cheapest)
   printf ("    "%s%"\n") $
-    maybe "No left ring" (itemName . (rings !!)) (leftRingIdx loadout)
+    maybe "No left ring" (itemName . (rings !!)) (leftRingIdx cheapest)
   printf ("    "%s%"\n") $
-    maybe "No right ring" (itemName . (rings !!)) (rightRingIdx loadout)
-  printf ("Total cost (part 1): "%d%"\n") cost
+    maybe "No right ring" (itemName . (rings !!)) (rightRingIdx cheapest)
+  printf ("Total cost (part 1): "%d%"\n") cheapest_cost
+  let maximal = Loadout 4 (Just 4) (Just 4) (Just 5)
+  most_expensive_steps <-
+    case Search.djikstra downgrade (not . won_fight) [] maximal of
+      Just victory -> return (snd victory)
+      Nothing -> die "Victory is certain!"
+  let most_expensive = snd $ last most_expensive_steps
+  let most_expensive_cost = loadoutCost most_expensive
+  printf "Most expensive losing loadout (part 2):\n"
+  printf ("    "%s%"\n") . itemName $ weapons !! weaponIdx most_expensive
+  printf ("    "%s%"\n") $
+    maybe "No armor" (itemName . (armors !!)) (armorIdx most_expensive)
+  printf ("    "%s%"\n") $
+    maybe "No left ring" (itemName . (rings !!)) (leftRingIdx most_expensive)
+  printf ("    "%s%"\n") $
+    maybe "No right ring" (itemName . (rings !!)) (rightRingIdx most_expensive)
+  printf ("Total cost (part 2): "%d%"\n") most_expensive_cost
+
 
 battle :: Character -> Character -> PlayerName
 battle p1 p2
@@ -63,6 +80,33 @@ upgrade loadout =
       if idx + 1 >= length table
       then Nothing
       else Just (idx + 1)
+
+downgrade ::
+  Loadout -- current loadout
+  -> [(Int, Loadout)] -- [(incremental savings, new loadout)]
+downgrade loadout =
+  Maybe.catMaybes [
+  do
+    wmidx <- try_downgrade (Just $ weaponIdx loadout) weapons
+    (\idx -> loadout { weaponIdx = idx }) <$> wmidx,
+  (\midx -> loadout { armorIdx = midx })
+    <$> try_downgrade (armorIdx loadout) armors,
+  (\midx -> loadout { leftRingIdx = midx })
+    <$> try_downgrade (leftRingIdx loadout) rings,
+  do
+    rmidx <- try_downgrade (rightRingIdx loadout) rings
+    let lmidx = leftRingIdx loadout
+    if Maybe.isNothing lmidx && Maybe.isNothing rmidx || lmidx < rmidx
+      then Just $ loadout {rightRingIdx = rmidx}
+      else Nothing
+  ]
+  & map (\new -> (loadoutCost loadout - loadoutCost new, new))
+  where
+    try_downgrade Nothing table = Nothing
+    try_downgrade (Just idx) table =
+      if idx == 0
+      then Just Nothing
+      else Just . Just $ idx - 1
 
 loadoutCost :: Loadout -> Int
 loadoutCost Loadout{..} =
