@@ -7,6 +7,7 @@ import Control.Lens
 import qualified Data.Ord as Ord
 import qualified Data.List as List
 import qualified Data.Maybe as Maybe
+import Control.Monad (forM_)
 import qualified Search
 
 main :: IO ()
@@ -22,8 +23,6 @@ main = sh $ do
     then printVerboseSolution mode initial_state total_mana steps
     else printSimpleSolution mode total_mana steps
 
-printVerboseSolution :: Difficulty -> BattleState -> Int
-  -> [(Int, BattleState)] -> Shell ()
 printVerboseSolution mode init total_mana steps = do
   printf ("Winning strategy ("%s%" mode):\n")
     (if mode == HardMode then "hard" else "easy")
@@ -31,15 +30,14 @@ printVerboseSolution mode init total_mana steps = do
     printState init
     printf "\n"
   let transitions = zip (modeEffects mode init: map snd steps) (map snd steps)
-  flip mapM_ transitions $ \(old_st, new_st) ->
+  forM_ transitions $ \(old_st, new_st) ->
     case new_st ^. justCast of
-      Just sp -> do
-        printTurn old_st sp
+      Just sp -> printTurn old_st sp
       Nothing -> return ()
   printf ("Total cost: "%d%" mana\n") total_mana
   where
     printTurn st sp = do
-      when (mode == HardMode) $ printf ("Hard mode deals 1 damage to player\n")
+      when (mode == HardMode) $ printf "Hard mode deals 1 damage to player\n"
       printState st
       printf ("  -> Player casts "%s%" ("%d%" mana)\n") (name sp) (cost sp)
       unless (null $ st ^. effects) $
@@ -47,7 +45,7 @@ printVerboseSolution mode init total_mana steps = do
         (Text.intercalate ", " . map (Text.pack . show) $ st ^. effects)
       let halfway = applyEffects . cast sp $ st
       printState halfway
-      if (halfway ^. boss . hp >= 0) then do
+      if halfway ^. boss . hp > 0 then do
         printf ("  -> Boss hits player for "%d%" damage\n") (bossDamage halfway)
         unless (null $ halfway ^. effects) $
           printf ("  -> Effects: "%s%"\n")
@@ -66,10 +64,9 @@ printVerboseSolution mode init total_mana steps = do
 printSimpleSolution mode mana steps = do
   printf ("Winning strategy ("%s%" mode):\n")
     (if mode == HardMode then "hard" else "easy")
-  flip mapM_ steps $ \(cst, st) ->
+  forM_ steps $ \(cst, st) ->
     case st ^. justCast of
-      Just sp -> do
-        printf ("    "%s%" ("%d%" mana)\n") (name sp) (cost sp)
+      Just sp -> printf ("    "%s%" ("%d%" mana)\n") (name sp) (cost sp)
       Nothing -> return ()
   printf ("Total cost: "%d%" mana\n") mana
 
@@ -169,7 +166,7 @@ possibleSpells st =
         case List.find (== sp) current_spells of
           Nothing -> True
           Just (Spell _ _ (EffectEnd _)) -> True
-          Just (_) -> False
+          Just _ -> False
   in filter (\sp -> cost sp <= current_mana && available sp) [
     magicMissile,
     drain,
@@ -252,7 +249,7 @@ ongoingEffect turns f
   | otherwise = Ongoing (turns - 1) f $ EffectEnd id
 
 immediateEffect :: (BattleState -> BattleState) -> Effect
-immediateEffect f = EffectEnd f
+immediateEffect = EffectEnd
 
 remainingTurns :: Effect -> Int
 remainingTurns (Ongoing t _ ef) = (t + 1) + remainingTurns ef
@@ -268,5 +265,4 @@ parser = (,,)
        <*> (fromIntegral <$> optInteger "damage" 'd' "Boss damage"))
   <*> ((\s -> if s then HardMode else EasyMode)
        <$> switch "hard-mode" 'm' "Set difficulty to hard mode")
-  <*> (switch "verbose" 'v' "produce verbose output")
-  
+  <*> switch "verbose" 'v' "produce verbose output"
