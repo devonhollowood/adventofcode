@@ -13,28 +13,38 @@ main = sh $ do
   let initial_player = Character 50 500 0 0
   let initial_state = BattleState initial_player initial_boss [] Nothing
   (total_mana, steps) <-
-    case Search.djikstra
-         (\st -> map (\sp -> (cost sp, bossTurn $ cast sp st)) spells)
-         (\st -> st ^. (boss . hp) <= 0)
-         [\st -> st ^. (player . hp) <= 0]
-         initial_state
-    of
+    case runSearch initial_state of
       Just (mana, steps) -> return (mana, steps)
       Nothing -> die "Victory is impossible!"
   printf "Winning strategy:\n"
   mapM_ (\(cst, st) ->
-           case justCast st of
+           case st ^. justCast of
              Just sp -> printf ("    "%s%" ("%d%" mana)\n") (name sp) (cost sp)
              Nothing -> return ()
         )
     steps
-  printf ("Total cost: "%d%"\n") total_mana
+  printf ("Total cost: "%d%" mana\n") total_mana
+
+runSearch initial_state = 
+  Search.djikstra
+  (\st -> map (\sp -> (cost sp, fullTurn sp st)) (possibleSpells st))
+  (\st -> st ^. (boss . hp) <= 0) -- win
+  [\st -> st ^. (player . hp) <= 0] -- lose
+  initial_state
 
 fullTurn :: Spell -> BattleState -> BattleState
-fullTurn sp = bossTurn . applyEffects . cast sp . applyEffects
+fullTurn sp st =
+  let halfway = applyEffects . cast sp $ st
+  in
+    if halfway ^. boss . hp <= 0
+    then halfway
+    else applyEffects . bossTurn $ halfway
 
 cast :: Spell -> BattleState -> BattleState
-cast sp st = st & over effects (sp :)
+cast sp st = st
+  & over effects (sp :)
+  & player . mana -~ cost sp
+  & justCast .~ Just sp
 
 bossTurn :: BattleState -> BattleState
 bossTurn st = st & player . hp -~ (if raw_damage > 1 then raw_damage else 1)
@@ -49,57 +59,62 @@ applyEffects st =
         (st ^. effects)
       act sp =
         case effect sp of
-          Immediate f -> f
-          Ongoing _ f -> f
+          Ongoing _ f _ -> f
+          EffectEnd f -> f
       update sp rest =
         case effect sp of
-          Immediate _ -> rest
-          Ongoing 0 _ -> rest
-          Ongoing t f -> sp {effect = Ongoing (t - 1) f} : rest
+          EffectEnd _ -> rest
+          Ongoing 0 _ ef -> sp {effect = ef} : rest
+          Ongoing t f ef -> sp {effect = Ongoing (t - 1) f ef} : rest
   in final_st & effects .~ final_effs
 
 magicMissile :: Spell
 magicMissile = Spell {
   name = "Magic Missile",
   cost = 53,
-  effect = Immediate $ \st -> st & boss . hp -~ 4
+  effect = immediateEffect $ \st -> st & boss . hp -~ 4
   }
 
 drain :: Spell
 drain = Spell {
   name = "Drain",
   cost = 73,
-  effect = Immediate $ \st -> st & (boss . hp -~ 2) . (player . hp +~ 2)
+  effect = immediateEffect $ \st -> st & (boss . hp -~ 2) . (player . hp +~ 2)
   }
 
 shield :: Spell
 shield = Spell {
   name = "Shield",
   cost = 113,
-  effect = Ongoing 6 $ \st -> st & player . armor +~ 7
+  effect = bracketedEffect 6
+    (\st -> st & player . armor +~ 7)
+    (\st -> st & player . armor -~ 7)
   }
 
 poison :: Spell
 poison = Spell {
   name = "Poison",
-  cost = 73,
-  effect = Ongoing 6 $ \st -> st & boss . hp -~ 3
+  cost = 173,
+  effect = ongoingEffect 6 $ \st -> st & boss . hp -~ 3
   }
 
 recharge :: Spell
 recharge = Spell {
   name = "Recharge",
   cost = 229,
-  effect = Ongoing 5 $ \st -> st & player . mana +~ 101
+  effect = ongoingEffect 5 $ \st -> st & player . mana +~ 101
   }
 
-spells :: [Spell]
-spells = [
-  magicMissile,
-  drain,
-  shield,
-  poison,
-  recharge
+possibleSpells :: BattleState -> [Spell]
+possibleSpells st =
+  let current_mana = st ^. player . mana
+      current_spells = st ^. effects
+  in filter (\sp -> cost sp <= current_mana && not (sp `elem` current_spells)) [
+    magicMissile,
+    drain,
+    shield,
+    poison,
+    recharge
   ]
 
 data Result = Win | Lose
@@ -108,7 +123,7 @@ data BattleState = BattleState {
   _player :: Character,
   _boss :: Character,
   _effects :: [Spell],
-  justCast :: Maybe Spell
+  _justCast :: Maybe Spell
   } deriving (Eq, Ord, Show)
 
 player :: Lens' BattleState Character
@@ -117,6 +132,8 @@ boss :: Lens' BattleState Character
 boss = lens _boss (\bs x -> bs {_boss = x })
 effects :: Lens' BattleState [Spell]
 effects = lens _effects (\bs x -> bs {_effects = x })
+justCast :: Lens' BattleState (Maybe Spell)
+justCast = lens _justCast (\bs x -> bs {_justCast = x})
 
 data Character = Character {
   _hp :: Int,
@@ -141,7 +158,8 @@ data Spell = Spell {
   }
 
 instance Show Spell where
-  show = Text.unpack . name
+  show sp = Text.unpack $
+    format (s%" "%d) (name sp) (remainingTurns $ effect sp)
 
 instance Eq Spell where
   a == b = name a == name b
@@ -150,12 +168,33 @@ instance Ord Spell where
   compare = Ord.comparing name
 
 data Effect =
-  Immediate (BattleState -> BattleState)
-  | Ongoing Int (BattleState -> BattleState)
+  Ongoing Int (BattleState -> BattleState) Effect
+  | EffectEnd (BattleState -> BattleState)
+
+bracketedEffect ::
+  Int -- Turns
+  -> (BattleState -> BattleState) -- Start
+  -> (BattleState -> BattleState) -- End
+  -> Effect
+bracketedEffect turns f inverse =
+  Ongoing 0 f $ Ongoing (turns - 1) id $ EffectEnd inverse
+
+ongoingEffect ::
+  Int -- Turns
+  -> (BattleState -> BattleState) -- status change
+  -> Effect
+ongoingEffect turns f = Ongoing (turns - 2) f $ EffectEnd f
+
+immediateEffect :: (BattleState -> BattleState) -> Effect
+immediateEffect f = EffectEnd f
+
+remainingTurns :: Effect -> Int
+remainingTurns (Ongoing t _ ef) = (t + 1) + remainingTurns ef
+remainingTurns (EffectEnd f) = 0
 
 parser =
   Character
   <$> (fromIntegral <$> optInteger "health" 'p' "Boss health")
   <*> pure 0
-  <*> (fromIntegral <$> optInteger "damage" 'd' "Boss damage")
   <*> pure 0
+  <*> (fromIntegral <$> optInteger "damage" 'd' "Boss damage")
