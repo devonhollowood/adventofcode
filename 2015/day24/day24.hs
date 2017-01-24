@@ -15,21 +15,28 @@ main = sh $ do
       [x] -> return x
       [] -> die "failed to parse weights"
       matches -> die $ format ("ambiguous weights parse: "%w) matches
-  solution <-
-    case packSleigh weights of
+  three_way_solution <-
+    case packSleigh 3 weights of
       Just sol -> return sol
-      Nothing -> die "No solution found!"
-  printf ("Solution (part 1): "%w%"\n") solution
+      Nothing -> die "No part 1 solution found!"
+  printf ("Solution (part 1): "%w%"\n") three_way_solution
   printf ("    Quantum entanglement: "%d%"\n")
-    (quantumEntanglement (head solution))
+    (quantumEntanglement (head three_way_solution))
+  four_way_solution <-
+    case packSleigh 4 weights of
+      Just sol -> return sol
+      Nothing -> die "No part 2 solution found!"
+  printf ("Solution (part 2): "%w%"\n") four_way_solution
+  printf ("    Quantum entanglement: "%d%"\n")
+    (quantumEntanglement (head four_way_solution))
 
 
 quantumEntanglement :: [Int] -> Int
 quantumEntanglement = product
 
-packSleigh :: [Int] -> Maybe [[Int]]
-packSleigh xs =
-  case splitEvenly 3 xs
+packSleigh :: Int -> [Int] -> Maybe [[Int]]
+packSleigh n xs =
+  case splitEvenly n xs
   of
     (way : _) -> Just way
     [] -> Nothing
