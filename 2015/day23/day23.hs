@@ -26,6 +26,10 @@ main = sh $ do
   printf "Final register values (part 1):\n"
   printf ("    a: "%d%"\n") a
   printf ("    b: "%d%"\n") b
+  let (a', b') = run (1, 0) instrs
+  printf "Final register values (part 2):\n"
+  printf ("    a: "%d%"\n") a'
+  printf ("    b: "%d%"\n") b'
 
 run :: (Int, Int) -> Vector Instruction -> (Int, Int)
 run init instrs = go init 0
