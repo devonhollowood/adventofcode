@@ -29,9 +29,7 @@ quantumEntanglement = product
 
 packSleigh :: [Int] -> Maybe [[Int]]
 packSleigh xs =
-  case List.sortBy
-       (comparing (length . head) <> comparing (quantumEntanglement . head))
-       (splitEvenly 3 xs)
+  case splitEvenly 3 xs
   of
     (way : _) -> Just way
     [] -> Nothing
@@ -54,7 +52,9 @@ fillToN ::
   -> [Int] -- ascending list to fill from
   -> [([Int], [Int])] -- [(way to fill to `target`, remaining list)]
 fillToN target =
-  map (\(way, rest) -> (reverse way, reverse rest))
+  List.sortBy
+  (comparing (length . fst) <> comparing (quantumEntanglement . fst))
+  . map (\(way, rest) -> (reverse way, reverse rest))
   . go 0 [] []
   where
     go sum chosen unchosen (x : xs)
