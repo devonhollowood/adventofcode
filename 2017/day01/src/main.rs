@@ -21,12 +21,15 @@ fn part1(input: &str) -> u32 {
 
 fn part2(input: &str) -> u32 {
     let size = input.chars().filter_map(|c| c.to_digit(10)).count();
-    let rotated_iter = input.chars().filter_map(|c| c.to_digit(10)).cycle();
+    let rotated_iter = input
+        .chars()
+        .cycle()
+        .filter_map(|c| c.to_digit(10))
+        .skip(size / 2);
     input
         .chars()
-        .chain(input.chars().next())
         .filter_map(|c| c.to_digit(10))
-        .tuple_windows()
+        .zip(rotated_iter)
         .map(|(x, y)| if x == y { x } else { 0 })
         .sum()
 }
@@ -64,5 +67,14 @@ mod tests {
         assert_eq!(part1("1111"), 4);
         assert_eq!(part1("1234"), 0);
         assert_eq!(part1("91212129"), 9);
+    }
+
+    #[test]
+    fn part2_test() {
+        assert_eq!(part2("1212"), 6);
+        assert_eq!(part2("1221"), 0);
+        assert_eq!(part2("123425"), 4);
+        assert_eq!(part2("123123"), 12);
+        assert_eq!(part2("12131415"), 4);
     }
 }
