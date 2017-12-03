@@ -23,6 +23,28 @@ fn part1(input: &str) -> u64 {
         .sum()
 }
 
+fn part2(input: &str) -> u64 {
+    input
+        .lines()
+        .map(|line| {
+            let values: Vec<_> = line.split_whitespace()
+                .filter_map(|entry| entry.parse::<u64>().ok())
+                .collect();
+            let mut result = None;
+            'outer: for a in &values {
+                for b in &values {
+                    if a != b && a % b == 0 {
+                        result = Some(a / b);
+                        break 'outer;
+                    }
+                }
+            }
+            result
+        })
+        .filter_map(|x| x)
+        .sum()
+}
+
 fn main() {
     let opt = Opt::from_args();
     let mut contents = String::new();
@@ -37,10 +59,11 @@ fn main() {
             .expect(&format!("could not read file {}", opt.input));
     }
     println!("Part 1: {}", part1(&contents));
+    println!("Part 2: {}", part2(&contents));
 }
 
 #[derive(StructOpt, Debug)]
-#[structopt(name = "day01", about = "Advent of code 2017 Day 01")]
+#[structopt(name = "day02", about = "Advent of code 2017 day 02")]
 struct Opt {
     #[structopt(help = "Input file")] input: String,
 }
@@ -52,5 +75,10 @@ mod tests {
     #[test]
     fn part1_test() {
         assert_eq!(part1("5 1 9 5\n7 5 3\n2 4 6 8"), 18)
+    }
+
+    #[test]
+    fn part2_test() {
+        assert_eq!(part2("5 9 2 8\n9 4 7 3\n3 8 6 5"), 9)
     }
 }
