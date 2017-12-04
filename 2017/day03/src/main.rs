@@ -4,6 +4,8 @@ extern crate structopt_derive;
 
 use structopt::StructOpt;
 
+use std::collections::BTreeMap;
+
 type Position = (i64, i64);
 
 fn location(num: u64) -> Position {
@@ -59,16 +61,76 @@ fn part1(input: u64) -> u64 {
     manhattan_distance(loc, (0, 0))
 }
 
+fn index(loc: Position) -> u64 {
+    if loc == (0, 0) {
+        // special case
+        return 1;
+    }
+    let edge_dist = i64::max(loc.0.abs(), loc.1.abs());
+    let edge_len = edge_dist * 2;
+    let square_sum = (edge_len + 1) * (edge_len + 1);
+    (if loc.1 == -edge_dist {
+        // bottom edge
+        square_sum - edge_dist + loc.0
+    } else if loc.0 == -edge_dist {
+        // left edge
+        square_sum - edge_len - edge_dist - loc.1
+    } else if loc.1 == edge_dist {
+        // upper edge
+        square_sum - edge_len * 2 - edge_dist - loc.0
+    } else {
+        // right edge
+        square_sum - edge_len * 3 - edge_dist + loc.1
+    }) as u64
+}
+
+fn value(loc: Position, mut memo: &mut BTreeMap<Position, u64>) -> u64 {
+    if loc == (0, 0) {
+        // base case
+        return 1;
+    }
+    if memo.contains_key(&loc) {
+        return memo[&loc];
+    }
+    let neighbors = vec![
+        (loc.0 - 1, loc.1 + 1),
+        (loc.0, loc.1 + 1),
+        (loc.0 + 1, loc.1 + 1),
+        (loc.0 - 1, loc.1),
+        (loc.0 + 1, loc.1),
+        (loc.0 - 1, loc.1 - 1),
+        (loc.0, loc.1 - 1),
+        (loc.0 + 1, loc.1 - 1),
+    ];
+    let val = neighbors
+        .into_iter()
+        .filter(|pos| index(*pos) < index(loc))
+        .map(|pos| value(pos, &mut memo))
+        .sum();
+    memo.insert(loc, val);
+    val
+}
+
+fn part2(target: u64) -> u64 {
+    let mut memo = BTreeMap::new();
+    let mut idx = 1;
+    loop {
+        let loc = location(idx);
+        let val = value(loc, &mut memo);
+        if val > target {
+            return val;
+        }
+        idx += 1;
+    }
+}
+
 fn main() {
     let opt = Opt::from_args();
-    println!(
-        "Part 1: {}",
-        part1(
-            opt.input
-                .parse::<u64>()
-                .expect("could not parse argument as unsigned integer")
-        )
-    );
+    let input = opt.input
+        .parse::<u64>()
+        .expect("could not parse argument as unsigned integer");
+    println!("Part 1: {}", part1(input));
+    println!("Part 2: {}", part2(input));
 }
 
 #[derive(StructOpt, Debug)]
@@ -100,5 +162,30 @@ mod tests {
         assert_eq!(part1(12), 3);
         assert_eq!(part1(23), 2);
         assert_eq!(part1(1024), 31);
+    }
+
+    #[test]
+    fn index_test() {
+        assert_eq!(index((0, 0)), 1);
+        assert_eq!(index((2, -1)), 10);
+        assert_eq!(index((2, 2)), 13);
+        assert_eq!(index((1, 2)), 14);
+        assert_eq!(index((-2, 2)), 17);
+        assert_eq!(index((-2, 1)), 18);
+        assert_eq!(index((-2, -2)), 21);
+        assert_eq!(index((-1, -2)), 22);
+        assert_eq!(index((2, -2)), 25);
+    }
+
+    #[test]
+    fn value_test() {
+        assert_eq!(value((0, 0), &mut BTreeMap::new()), 1);
+        assert_eq!(value((2, -1), &mut BTreeMap::new()), 26);
+        assert_eq!(value((2, 2), &mut BTreeMap::new()), 59);
+        assert_eq!(value((1, 2), &mut BTreeMap::new()), 122);
+        assert_eq!(value((-2, 2), &mut BTreeMap::new()), 147);
+        assert_eq!(value((-2, 1), &mut BTreeMap::new()), 304);
+        assert_eq!(value((-2, -2), &mut BTreeMap::new()), 362);
+        assert_eq!(value((-1, -2), &mut BTreeMap::new()), 747);
     }
 }
