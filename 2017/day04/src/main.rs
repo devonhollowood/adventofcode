@@ -1,7 +1,9 @@
+extern crate itertools;
 extern crate structopt;
 #[macro_use]
 extern crate structopt_derive;
 
+use itertools::Itertools;
 use structopt::StructOpt;
 use std::fs::File;
 use std::collections::BTreeSet;
@@ -18,8 +20,24 @@ fn valid(passphrase: &str) -> bool {
     true
 }
 
+fn valid2(passphrase: &str) -> bool {
+    let mut used = BTreeSet::new();
+    for word in passphrase.split_whitespace() {
+        let canonical = word.chars().sorted();
+        if used.contains(&canonical) {
+            return false;
+        }
+        used.insert(canonical);
+    }
+    true
+}
+
 fn part1(input: &str) -> usize {
     input.lines().filter(|line| valid(line)).count()
+}
+
+fn part2(input: &str) -> usize {
+    input.lines().filter(|line| valid2(line)).count()
 }
 
 fn main() {
@@ -36,6 +54,7 @@ fn main() {
             .expect(&format!("could not read file {}", opt.input));
     }
     println!("Part 1: {}", part1(&contents));
+    println!("Part 2: {}", part2(&contents));
 }
 
 #[derive(StructOpt, Debug)]
@@ -53,5 +72,14 @@ mod tests {
         assert_eq!(valid("aa bb cc dd ee"), true);
         assert_eq!(valid("aa bb cc dd aa"), false);
         assert_eq!(valid("aa bb cc dd aaa"), true);
+    }
+
+    #[test]
+    fn valid2_test() {
+        assert_eq!(valid2("abcde fghij"), true);
+        assert_eq!(valid2("abcde xyz ecdab"), false);
+        assert_eq!(valid2("a ab abc abd abf abj"), true);
+        assert_eq!(valid2("iiii oiii ooii oooi oooo"), true);
+        assert_eq!(valid2("oiii ioii iioi iiio"), false);
     }
 }
