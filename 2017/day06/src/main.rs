@@ -3,7 +3,7 @@ extern crate structopt;
 extern crate structopt_derive;
 
 use structopt::StructOpt;
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Read;
 
@@ -28,19 +28,19 @@ fn distribute(blocks: &mut [usize]) {
     }
 }
 
-fn part1(input: &str) -> usize {
-    let mut states = BTreeSet::new();
+fn cycle_detect(input: &str) -> (usize, usize) {
+    let mut states = BTreeMap::new();
     let mut blocks = input
         .split_whitespace()
         .map(|s| s.parse().expect("Could not parse"))
         .collect::<Vec<usize>>();
     let mut count = 0;
-    while !states.contains(&blocks) {
-        states.insert(blocks.clone());
+    while !states.contains_key(&blocks) {
+        states.insert(blocks.clone(), count);
         distribute(&mut blocks);
         count += 1;
     }
-    count
+    (count, count - states[&blocks])
 }
 
 fn main() {
@@ -56,7 +56,9 @@ fn main() {
         file.read_to_string(&mut contents)
             .expect(&format!("could not read file {}", opt.input));
     }
-    println!("Part 1: {}", part1(&contents));
+    let cycles = cycle_detect(&contents);
+    println!("Part 1: {}", cycles.0);
+    println!("Part 2: {}", cycles.1);
 }
 
 #[derive(StructOpt, Debug)]
@@ -85,7 +87,7 @@ mod tests {
     }
 
     #[test]
-    fn part1_test() {
-        assert_eq!(part1("0 2 7 0"), 5);
+    fn cycle_detect_test() {
+        assert_eq!(cycle_detect("0 2 7 0"), (5, 4));
     }
 }
