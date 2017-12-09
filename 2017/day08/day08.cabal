@@ -11,7 +11,6 @@ copyright:           2017 Devon Hollowood
 category:            Educational
 build-type:          Simple
 cabal-version:       >=1.10
-extra-source-files:  README.md
 
 executable day08
   hs-source-dirs:      src

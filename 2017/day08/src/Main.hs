@@ -26,29 +26,39 @@ main = do
   let instructions =
         either (error . Mpc.parseErrorPretty) id
         $ Mpc.runParser pInstructions filename contents
-  let final = foldl' perform Map.empty instructions :: CpuState
-  let max_entry = maximumBy (comparing snd) (Map.assocs final)
+  let update_with_max (old_st, best@(_, best_val)) inst =
+        case perform old_st inst of
+          Nothing -> (old_st, best)
+          change@(Just new@(_, val)) ->
+            if val > best_val
+            then (update old_st change, new)
+            else (update old_st change, best)
+  let (final_st, highest) =
+        foldl' update_with_max (Map.empty, ("(none)", 0)) instructions
+  let max_entry = maximumBy (comparing snd) (Map.assocs final_st)
   putStrLn $ "Part 1: " ++ show (fst max_entry) ++ " = " ++ show (snd max_entry)
+  putStrLn $ "Part 2: " ++ show (fst highest) ++ " = " ++ show (snd highest)
 
 deref :: CpuState -> Operand -> Int
 deref _ (OpNum i) = i
 deref state (OpAddr addr) = fromMaybe 0 $ Map.lookup addr state
 
-perform :: CpuState -> Instruction -> CpuState
+update :: CpuState -> Maybe (Address, Int) -> CpuState
+update state (Just (addr, val)) = Map.insert addr val state
+update state Nothing = state
+
+perform :: CpuState -> Instruction -> Maybe (Address, Int)
 perform state (Instruction Action{..} Conditional{..}) =
   if condOp state condLeft condRight
-  then actOp state actLeft actRight
-  else state
+  then Just $ actOp state actLeft actRight
+  else Nothing
 
 raiseOp :: (Int -> Int -> a) -> CpuState -> Operand -> Operand -> a
 raiseOp f state opA opB = f (deref state opA) (deref state opB)
 
-mkAct :: (Int -> Int -> Int) -> CpuState -> Address -> Operand -> CpuState
+mkAct :: (Int -> Int -> Int) -> CpuState -> Address -> Operand -> (Address, Int)
 mkAct f state left right =
-  Map.insert
-    left
-    (f (deref state $ OpAddr left) (deref state right))
-    state
+    (left, f (deref state $ OpAddr left) (deref state right))
 
 data Instruction = Instruction {
   instAct :: Action,
@@ -56,7 +66,7 @@ data Instruction = Instruction {
 }
 
 data Action = Action {
-  actOp :: CpuState -> Address -> Operand -> CpuState,
+  actOp :: CpuState -> Address -> Operand -> (Address, Int),
   actLeft :: Address,
   actRight :: Operand
 }
