@@ -20,10 +20,12 @@ fn reverse<T>(input: &mut [T], mut start: usize, mut len: usize) {
     }
 }
 
-fn shuffle<T>(input: &mut [T], lengths: &[usize]) {
+fn shuffle<T, Iter>(input: &mut [T], lengths: Iter)
+    where Iter: IntoIterator<Item = usize>
+{
     let mut position = 0;
-    for (skip, length) in lengths.iter().enumerate() {
-        reverse(input, position, *length);
+    for (skip, length) in lengths.into_iter().enumerate() {
+        reverse(input, position, length);
         position += length + skip;
     }
 }
@@ -35,22 +37,21 @@ fn part1(input: &str) -> Vec<u8> {
         .split(',')
         .map(|val| val.parse().expect(&format!("could not parse {}", val)))
         .collect();
-    shuffle(&mut output, &lengths);
+    shuffle(&mut output, lengths);
     output
 }
 
 fn part2(input: &str) -> Vec<u8> {
+    let mut output: Vec<u8> = (0..256u16).map(|i| i as u8).collect();
     let mut lengths = input.trim().as_bytes().to_owned();
-    lengths.append(&mut vec![17, 31, 73, 47, 23]);
-    let repeated: Vec<usize> = lengths
+    lengths.extend(vec![17, 31, 73, 47, 23]);
+    let repeated = lengths
         .iter()
         .cycle()
         .map(|i| *i as usize)
-        .take(lengths.len() * 64)
-        .collect();
-    let mut output: Vec<u8> = (0..256u16).map(|i| i as u8).collect();
+        .take(lengths.len() * 64);
     // get sparse hash
-    shuffle(&mut output, &repeated);
+    shuffle(&mut output, repeated);
     output
         .chunks(16)
         .map(|chunk| chunk.iter().fold(0, |n, m| n ^ m))
@@ -58,7 +59,7 @@ fn part2(input: &str) -> Vec<u8> {
 }
 
 fn as_hex(input: &[u8]) -> String {
-    let mut s = String::with_capacity(input.len());
+    let mut s = String::with_capacity(input.len() * 2);
     for elem in input {
         s.push_str(&format!("{:02x}", elem));
     }
@@ -102,7 +103,7 @@ mod tests {
     fn shuffle_test() {
         let mut input = vec![0, 1, 2, 3, 4];
         let lengths = vec![3, 4, 1, 5];
-        shuffle(&mut input, &lengths);
+        shuffle(&mut input, lengths);
         assert_eq!(input, vec![3, 4, 2, 1, 0])
     }
 
