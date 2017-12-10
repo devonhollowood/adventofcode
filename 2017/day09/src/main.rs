@@ -37,12 +37,21 @@ impl Group {
             })
             .sum::<usize>() + 1
     }
+    fn garbage_len(&self) -> usize {
+        self.subgroups
+            .iter()
+            .map(|contents| match *contents {
+                GroupContents::SubGroup(ref sg) => sg.garbage_len(),
+                GroupContents::Garbage(count) => count,
+            })
+            .sum::<usize>()
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
 enum GroupContents {
     SubGroup(Group),
-    Garbage(Vec<u8>),
+    Garbage(usize),
 }
 
 fn main() {
@@ -58,10 +67,11 @@ fn main() {
         file.read_to_string(&mut contents)
             .expect(&format!("could not read file {}", opt.input));
     }
-    println!(
-        "Part 1: {}",
-        group(contents.as_bytes()).to_full_result().unwrap().score()
-    );
+    let parsed = group(contents.as_bytes())
+        .to_full_result()
+        .expect("Could not parse input");
+    println!("Part 1: {}", parsed.score());
+    println!("Part 2: {}", parsed.garbage_len());
 }
 
 named!(
@@ -72,7 +82,7 @@ named!(
             separated_list_complete!(
                 char!(','),
                 alt_complete!(
-                    map!(garbage, |g| GroupContents::Garbage(g.to_owned())) |
+                    map!(garbage, GroupContents::Garbage) |
                     map!(group, GroupContents::SubGroup)
                 )
             ),
@@ -83,10 +93,15 @@ named!(
 );
 
 named!(
-    garbage,
+    garbage<usize>,
     delimited!(
         char!('<'),
-        recognize!(many0!(alt_complete!(escaped_char | is_not!("!>")))),
+        map!(
+            many0!(alt_complete!(
+                map!(escaped_char, |_| 0) | map!(is_not!("!>"), |s| s.len())
+            )),
+            |v| v.iter().sum()
+        ),
         char!('>')
     )
 );
@@ -190,31 +205,19 @@ mod tests {
 
     #[test]
     fn garbage_test() {
-        assert_eq!(garbage(&b"<>"[..]), IResult::Done(&b""[..], &b""[..]));
+        assert_eq!(garbage(&b"<>"[..]), IResult::Done(&b""[..], 0));
         assert_eq!(
             garbage(&b"<random characters>"[..]),
-            IResult::Done(&b""[..], &b"random characters"[..])
+            IResult::Done(&b""[..], 17)
         );
-        assert_eq!(
-            garbage(&b"<<<<>"[..]),
-            IResult::Done(&b""[..], &b"<<<"[..])
-        );
-        assert_eq!(
-            garbage(&b"<{!>}>"[..]),
-            IResult::Done(&b""[..], &b"{!>}"[..])
-        );
-        assert_eq!(garbage(&b"<!!>"[..]), IResult::Done(&b""[..], &b"!!"[..]));
-        assert_eq!(
-            garbage(&b"<!!!>>"[..]),
-            IResult::Done(&b""[..], &b"!!!>"[..])
-        );
+        assert_eq!(garbage(&b"<<<<>"[..]), IResult::Done(&b""[..], 3));
+        assert_eq!(garbage(&b"<{!>}>"[..]), IResult::Done(&b""[..], 2));
+        assert_eq!(garbage(&b"<!!>"[..]), IResult::Done(&b""[..], 0));
+        assert_eq!(garbage(&b"<!!!>>"[..]), IResult::Done(&b""[..], 0));
         assert_eq!(
             garbage(&b"<{o\"i!a,<{i<a>"[..]),
-            IResult::Done(&b""[..], &b"{o\"i!a,<{i<a"[..])
+            IResult::Done(&b""[..], 10)
         );
-        assert_eq!(
-            garbage(&b"<!!>>"[..]),
-            IResult::Done(&b">"[..], &b"!!"[..])
-        );
+        assert_eq!(garbage(&b"<!!>>"[..]), IResult::Done(&b">"[..], 0));
     }
 }
