@@ -22,11 +22,9 @@ fn reverse<T>(input: &mut [T], mut start: usize, mut len: usize) {
 
 fn shuffle<T>(input: &mut [T], lengths: &[usize]) {
     let mut position = 0;
-    let mut skip = 0;
-    for length in lengths {
+    for (skip, length) in lengths.iter().enumerate() {
         reverse(input, position, *length);
         position += length + skip;
-        skip += 1;
     }
 }
 
@@ -39,6 +37,32 @@ fn part1(input: &str) -> Vec<u8> {
         .collect();
     shuffle(&mut output, &lengths);
     output
+}
+
+fn part2(input: &str) -> Vec<u8> {
+    let mut lengths = input.trim().as_bytes().to_owned();
+    lengths.append(&mut vec![17, 31, 73, 47, 23]);
+    let repeated: Vec<usize> = lengths
+        .iter()
+        .cycle()
+        .map(|i| *i as usize)
+        .take(lengths.len() * 64)
+        .collect();
+    let mut output: Vec<u8> = (0..256u16).map(|i| i as u8).collect();
+    // get sparse hash
+    shuffle(&mut output, &repeated);
+    output
+        .chunks(16)
+        .map(|chunk| chunk.iter().fold(0, |n, m| n ^ m))
+        .collect()
+}
+
+fn as_hex(input: &[u8]) -> String {
+    let mut s = String::with_capacity(input.len());
+    for elem in input {
+        s.push_str(&format!("{:02x}", elem));
+    }
+    s
 }
 
 fn main() {
@@ -61,6 +85,7 @@ fn main() {
         shuffled[1],
         shuffled[0] as usize * shuffled[1] as usize
     );
+    println!("Part 2: {}", as_hex(&part2(&contents)));
 }
 
 #[derive(StructOpt, Debug)]
@@ -89,5 +114,16 @@ mod tests {
         let mut b = vec![0, 1, 2, 3, 4];
         reverse(&mut b, 5, 3);
         assert_eq!(b, vec![2, 1, 0, 3, 4]);
+    }
+
+    #[test]
+    fn part2_test() {
+        assert_eq!(as_hex(&part2("")), "a2582a3a0e66e6e86e3812dcb672a272");
+        assert_eq!(
+            as_hex(&part2("AoC 2017")),
+            "33efeb34ea91902bb2f59c9920caa6cd"
+        );
+        assert_eq!(as_hex(&part2("1,2,3")), "3efbe78a8d82f29979031a4aa0b16a9d");
+        assert_eq!(as_hex(&part2("1,2,4")), "63960835bcdc130f0b66d7ff4f6a5a8e");
     }
 }
