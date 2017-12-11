@@ -15,21 +15,46 @@ struct Coordinate {
 
 impl Coordinate {
     fn origin() -> Coordinate {
-        Coordinate {x: 0, y: 0, z: 0}
+        Coordinate { x: 0, y: 0, z: 0 }
     }
     fn travel(&self, dir: &Direction) -> Coordinate {
         use Direction::*;
         match *dir {
-            N => Coordinate {x: self.x, y: self.y + 1, z: self.z - 1},
-            Ne => Coordinate {x: self.x + 1, y: self.y, z: self.z - 1},
-            Se => Coordinate {x: self.x + 1, y: self.y - 1, z: self.z},
-            S => Coordinate {x: self.x, y: self.y - 1, z: self.z + 1},
-            Sw => Coordinate {x: self.x - 1, y: self.y, z: self.z + 1},
-            Nw => Coordinate {x: self.x - 1, y: self.y + 1, z: self.z},
+            N => Coordinate {
+                x: self.x,
+                y: self.y + 1,
+                z: self.z - 1,
+            },
+            Ne => Coordinate {
+                x: self.x + 1,
+                y: self.y,
+                z: self.z - 1,
+            },
+            Se => Coordinate {
+                x: self.x + 1,
+                y: self.y - 1,
+                z: self.z,
+            },
+            S => Coordinate {
+                x: self.x,
+                y: self.y - 1,
+                z: self.z + 1,
+            },
+            Sw => Coordinate {
+                x: self.x - 1,
+                y: self.y,
+                z: self.z + 1,
+            },
+            Nw => Coordinate {
+                x: self.x - 1,
+                y: self.y + 1,
+                z: self.z,
+            },
         }
     }
     fn distance(&self, other: &Coordinate) -> isize {
-        ((self.x - other.x).abs() + (self.y - other.y).abs() + (self.z - other.z).abs()) / 2
+        ((self.x - other.x).abs() + (self.y - other.y).abs()
+            + (self.z - other.z).abs()) / 2
     }
 }
 
@@ -62,38 +87,21 @@ impl std::str::FromStr for Direction {
     }
 }
 
-fn part1(input: &str) -> isize {
-    let directions: Vec<_> = input
+// solve parts 1 and 2
+fn solve(input: &str) -> (isize, isize) {
+    let (end, max_dist) = input
         .trim()
         .split(',')
-        .map(|s| s
-             .parse::<Direction>()
-             .expect(&format!("could not parse direction \"{}\"", s))
-        )
-        .collect();
-    let end = directions.iter().fold(Coordinate::origin(), |loc, dir| loc.travel(dir));
-    Coordinate::origin().distance(&end)
-}
-
-fn part2(input: &str) -> isize {
-    let directions: Vec<_> = input
-        .trim()
-        .split(',')
-        .map(|s| s
-             .parse::<Direction>()
-             .expect(&format!("could not parse direction \"{}\"", s))
-        )
-        .collect();
-    let mut loc = Coordinate::origin();
-    let mut furthest = 0;
-    for dir in directions {
-        loc = loc.travel(&dir);
-        let dist = loc.distance(&Coordinate::origin());
-        if dist > furthest {
-            furthest = dist;
-        }
-    }
-    furthest
+        .map(|s| {
+            s.parse::<Direction>()
+                .expect(&format!("could not parse direction \"{}\"", s))
+        })
+        .fold((Coordinate::origin(), 0), |(loc, max_dist), dir| {
+            let new_loc = loc.travel(&dir);
+            let new_dist = new_loc.distance(&Coordinate::origin());
+            (new_loc, max_dist.max(new_dist))
+        });
+    (end.distance(&Coordinate::origin()), max_dist)
 }
 
 fn main() {
@@ -109,8 +117,9 @@ fn main() {
         file.read_to_string(&mut contents)
             .expect(&format!("could not read file {}", opt.input));
     }
-    println!("Part 1: {}", part1(&contents));
-    println!("Part 2: {}", part2(&contents));
+    let solution = solve(&contents);
+    println!("Part 1: {}", solution.0);
+    println!("Part 2: {}", solution.1);
 }
 
 #[derive(StructOpt, Debug)]
@@ -125,9 +134,9 @@ mod tests {
 
     #[test]
     fn part1_test() {
-        assert_eq!(part1("ne,ne,ne"), 3);
-        assert_eq!(part1("ne,ne,sw,sw"), 0);
-        assert_eq!(part1("ne,ne,s,s"), 2);
-        assert_eq!(part1("se,sw,se,sw,sw"), 3);
+        assert_eq!(solve("ne,ne,ne").0, 3);
+        assert_eq!(solve("ne,ne,sw,sw").0, 0);
+        assert_eq!(solve("ne,ne,s,s").0, 2);
+        assert_eq!(solve("se,sw,se,sw,sw").0, 3);
     }
 }
