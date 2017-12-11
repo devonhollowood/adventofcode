@@ -123,7 +123,7 @@ fn main() {
 }
 
 #[derive(StructOpt, Debug)]
-#[structopt(name = "day10", about = "Advent of code 2017 day 10")]
+#[structopt(name = "day11", about = "Advent of code 2017 day 11")]
 struct Opt {
     #[structopt(help = "Input file")] input: String,
 }
