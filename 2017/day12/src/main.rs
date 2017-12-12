@@ -6,6 +6,7 @@ use structopt::StructOpt;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Read;
+use std::path::PathBuf;
 
 type Node = usize;
 
@@ -78,15 +79,15 @@ fn part2(nodemap: &HashMap<Node, Vec<Node>>) -> usize {
 fn main() {
     let opt = Opt::from_args();
     let mut contents = String::new();
-    if opt.input == "-" {
+    if opt.input.to_str() == Some("-") {
         std::io::stdin()
             .read_to_string(&mut contents)
             .expect("could not read stdin");
     } else {
         let mut file = File::open(&opt.input)
-            .expect(&format!("file {} not found", opt.input));
+            .expect(&format!("file {} not found", opt.input.display()));
         file.read_to_string(&mut contents)
-            .expect(&format!("could not read file {}", opt.input));
+            .expect(&format!("could not read file {}", opt.input.display()));
     }
     let nodemap = parse(&contents);
     println!("Part 1: {}", part1(&nodemap));
@@ -96,7 +97,7 @@ fn main() {
 #[derive(StructOpt, Debug)]
 #[structopt(name = "day12", about = "Advent of code 2017 day 12")]
 struct Opt {
-    #[structopt(help = "Input file")] input: String,
+    #[structopt(help = "Input file", parse(from_os_str))] input: PathBuf,
 }
 
 #[cfg(test)]
