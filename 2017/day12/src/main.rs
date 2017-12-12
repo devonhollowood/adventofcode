@@ -29,16 +29,19 @@ fn parse(input: &str) -> HashMap<Node, Vec<Node>> {
                         })
                         .collect(),
                 ),
-                _ => panic!(format!("Could not parse line")),
+                _ => panic!(format!("Could not parse line {}", line)),
             }
         })
         .collect()
 }
 
-fn part1(nodemap: &HashMap<Node, Vec<Node>>) -> usize {
+fn node_group(
+    start: Node,
+    nodemap: &HashMap<Node, Vec<Node>>,
+) -> HashSet<Node> {
     let mut reachable = HashSet::<Node>::new();
     let mut outer_edge = HashSet::<Node>::new();
-    outer_edge.insert(0);
+    outer_edge.insert(start);
     while !outer_edge.is_empty() {
         let mut new_edge = HashSet::new();
         for item in outer_edge.drain() {
@@ -49,7 +52,27 @@ fn part1(nodemap: &HashMap<Node, Vec<Node>>) -> usize {
         }
         outer_edge = new_edge;
     }
-    reachable.len()
+    reachable
+}
+
+fn part1(nodemap: &HashMap<Node, Vec<Node>>) -> usize {
+    node_group(0, nodemap).len()
+}
+
+fn part2(nodemap: &HashMap<Node, Vec<Node>>) -> usize {
+    let mut visited = HashSet::<Node>::new();
+    let mut groups: Vec<HashSet<Node>> = Vec::new();
+    for start in nodemap.keys().cloned() {
+        if visited.contains(&start) {
+            continue;
+        }
+        let group = node_group(start, nodemap);
+        for node in &group {
+            visited.insert(node.clone());
+        }
+        groups.push(group);
+    }
+    groups.len()
 }
 
 fn main() {
@@ -67,6 +90,7 @@ fn main() {
     }
     let nodemap = parse(&contents);
     println!("Part 1: {}", part1(&nodemap));
+    println!("Part 2: {}", part2(&nodemap));
 }
 
 #[derive(StructOpt, Debug)]
@@ -79,17 +103,23 @@ struct Opt {
 mod tests {
     use super::*;
 
+    static TEST_INPUT: &str = "0 <-> 2\n\
+                               1 <-> 1\n\
+                               2 <-> 0, 3, 4\n\
+                               3 <-> 2, 4\n\
+                               4 <-> 2, 3, 6\n\
+                               5 <-> 6\n\
+                               6 <-> 4, 5\n";
+
     #[test]
     fn part1_test() {
-        let nodemap = parse(
-            "0 <-> 2\n\
-             1 <-> 1\n\
-             2 <-> 0, 3, 4\n\
-             3 <-> 2, 4\n\
-             4 <-> 2, 3, 6\n\
-             5 <-> 6\n\
-             6 <-> 4, 5\n",
-        );
+        let nodemap = parse(TEST_INPUT);
         assert_eq!(part1(&nodemap), 6);
+    }
+
+    #[test]
+    fn part2_test() {
+        let nodemap = parse(TEST_INPUT);
+        assert_eq!(part2(&nodemap), 2);
     }
 }
