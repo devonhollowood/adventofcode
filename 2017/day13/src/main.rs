@@ -3,55 +3,53 @@ extern crate structopt;
 extern crate structopt_derive;
 
 use structopt::StructOpt;
-use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
-
-type Node = usize;
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum Direction {
-    Up,
-    Down,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct Scanner {
     location: usize,
     range: usize,
-    direction: Direction,
 }
 
 impl Scanner {
-    fn advance(&mut self) {
-        use Direction::*;
+    fn location_at(&self, time: usize) -> usize {
         if self.range == 0 {
-            return;
+            return 0;
         }
-        if self.location == 0 {
-            self.direction = Down;
-        } else if self.location == self.range - 1 {
-            self.direction = Up;
-        }
-        match self.direction {
-            Up => self.location -= 1,
-            Down => self.location += 1,
+        let cycle_loc = time % (self.range * 2 - 2);
+        if cycle_loc > self.range {
+            cycle_loc - self.range
+        } else {
+            cycle_loc
         }
     }
 }
 
 #[derive(Debug, Clone)]
 struct Firewall {
-    scanners: HashMap<Node, Scanner>,
+    scanners: Vec<(usize, Scanner)>,
     depth: usize,
 }
 
 impl Firewall {
-    fn advance(&mut self) {
-        for scanner in self.scanners.values_mut() {
-            scanner.advance();
+    fn severity(&self) -> usize {
+        let mut severity = 0;
+        for &(depth, ref scanner) in &self.scanners {
+            if scanner.location_at(depth) == 0 {
+                severity += scanner.range * depth;
+            }
         }
+        severity
+    }
+    fn check(&self, delay: usize) -> bool {
+        for &(depth, ref scanner) in &self.scanners {
+            if scanner.location_at(delay + depth) == 0 {
+                return false;
+            }
+        }
+        true
     }
 }
 
@@ -59,7 +57,7 @@ impl std::str::FromStr for Firewall {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut max_depth = 0;
-        let mut scanners = HashMap::new();
+        let mut scanners = Vec::new();
         for line in s.lines() {
             let mut split = line.split(':');
             match (split.next(), split.next()) {
@@ -75,14 +73,13 @@ impl std::str::FromStr for Firewall {
                     if depth > max_depth {
                         max_depth = depth;
                     }
-                    scanners.insert(
+                    scanners.push((
                         depth,
                         Scanner {
                             location: 0,
                             range: range,
-                            direction: Direction::Down,
                         },
-                    );
+                    ));
                 }
                 _ => Err(format!("Could not parse: {}", line))?,
             }
@@ -94,42 +91,17 @@ impl std::str::FromStr for Firewall {
     }
 }
 
-fn part1(firewall: &mut Firewall) -> usize {
-    let mut severity = 0;
-    for depth in 0..firewall.depth + 1 {
-        {
-            if let Some(scanner) = firewall.scanners.get(&depth) {
-                if scanner.location == 0 {
-                    severity += depth * scanner.range;
-                }
-            }
-        }
-        firewall.advance();
-    }
-    severity
+fn part1(firewall: &Firewall) -> usize {
+    firewall.severity()
 }
 
-fn part2(firewall: &mut Firewall) -> usize {
-    let mut starts = HashSet::new();
-    let mut time = 0;
+fn part2(firewall: &Firewall) -> usize {
+    let mut delay = 0;
     loop {
-        starts.insert(time);
-        for start in starts.iter().cloned().collect::<Vec<usize>>() {
-            let mut loc = time - start;
-            {
-                if let Some(scanner) = firewall.scanners.get(&loc) {
-                    if scanner.location == 0 {
-                        starts.remove(&start);
-                        continue;
-                    }
-                }
-                if loc == firewall.depth {
-                    return start;
-                }
-            }
+        if firewall.check(delay) {
+            return delay;
         }
-        firewall.advance();
-        time += 1;
+        delay += 1;
     }
 }
 
@@ -147,8 +119,8 @@ fn main() {
             .expect(&format!("could not read file {}", opt.input.display()));
     }
     let firewall: Firewall = contents.parse().expect("Error parsing input");
-    println!("Part 1: {}", part1(&mut firewall.clone()));
-    println!("Part 2: {}", part2(&mut firewall.clone()));
+    println!("Part 1: {}", part1(&firewall));
+    println!("Part 2: {}", part2(&firewall));
 }
 
 #[derive(StructOpt, Debug)]
@@ -163,13 +135,13 @@ mod tests {
 
     #[test]
     fn part1_test() {
-        let mut firewall = "0: 3\n1: 2\n4: 4\n6: 4".parse().unwrap();
-        assert_eq!(part1(&mut firewall), 24);
+        let firewall = "0: 3\n1: 2\n4: 4\n6: 4".parse().unwrap();
+        assert_eq!(part1(&firewall), 24);
     }
 
     #[test]
     fn part2_test() {
-        let mut firewall = "0: 3\n1: 2\n4: 4\n6: 4".parse().unwrap();
-        assert_eq!(part2(&mut firewall), 10);
+        let firewall = "0: 3\n1: 2\n4: 4\n6: 4".parse().unwrap();
+        assert_eq!(part2(&firewall), 10);
     }
 }
