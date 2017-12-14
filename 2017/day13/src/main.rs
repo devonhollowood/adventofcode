@@ -3,7 +3,7 @@ extern crate structopt;
 extern crate structopt_derive;
 
 use structopt::StructOpt;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
@@ -109,6 +109,30 @@ fn part1(firewall: &mut Firewall) -> usize {
     severity
 }
 
+fn part2(firewall: &mut Firewall) -> usize {
+    let mut starts = HashSet::new();
+    let mut time = 0;
+    loop {
+        starts.insert(time);
+        for start in starts.iter().cloned().collect::<Vec<usize>>() {
+            let mut loc = time - start;
+            {
+                if let Some(scanner) = firewall.scanners.get(&loc) {
+                    if scanner.location == 0 {
+                        starts.remove(&start);
+                        continue;
+                    }
+                }
+                if loc == firewall.depth {
+                    return start;
+                }
+            }
+        }
+        firewall.advance();
+        time += 1;
+    }
+}
+
 fn main() {
     let opt = Opt::from_args();
     let mut contents = String::new();
@@ -124,6 +148,7 @@ fn main() {
     }
     let firewall: Firewall = contents.parse().expect("Error parsing input");
     println!("Part 1: {}", part1(&mut firewall.clone()));
+    println!("Part 2: {}", part2(&mut firewall.clone()));
 }
 
 #[derive(StructOpt, Debug)]
@@ -140,5 +165,11 @@ mod tests {
     fn part1_test() {
         let mut firewall = "0: 3\n1: 2\n4: 4\n6: 4".parse().unwrap();
         assert_eq!(part1(&mut firewall), 24);
+    }
+
+    #[test]
+    fn part2_test() {
+        let mut firewall = "0: 3\n1: 2\n4: 4\n6: 4".parse().unwrap();
+        assert_eq!(part2(&mut firewall), 10);
     }
 }
