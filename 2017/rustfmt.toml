@@ -70,4 +70,3 @@ multiline_closure_forces_block = false
 multiline_match_arm_forces_block = false
 merge_derives = true
 binop_separator = "Front"
-required_version = "0.2.16"
