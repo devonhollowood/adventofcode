@@ -37,7 +37,7 @@ impl std::str::FromStr for Operation {
                     )),
                     _ => Err(format!("Could not parse {} as Operation", input)),
                 }
-            },
+            }
             Some('p') => {
                 let mut split = chars.as_str().split('/');
                 match (split.next(), split.next()) {
@@ -57,22 +57,17 @@ impl std::str::FromStr for Operation {
     }
 }
 
-fn cycle_len(initial: &str, input: &str) -> usize {
-    let mut cycle_len = 1;
-    let mut changed = part1(initial, input);
-    while changed != initial {
-        changed = part1(&changed, input);
-        cycle_len += 1;
-    }
-    cycle_len
+fn parse(input: &str) -> Vec<Operation> {
+    input
+        .split(',')
+        .map(|s| s.parse().expect("Could not parse instructions"))
+        .collect()
 }
 
-fn part1(initial: &str, input: &str) -> String {
+fn part1(initial: &str, input: &[Operation]) -> String {
     let mut result = initial.to_owned();
-    let instructions: Vec<Operation> =
-        input.split(',').map(|s| s.parse().unwrap()).collect();
-    for instr in instructions {
-        match instr {
+    for instr in input {
+        match *instr {
             Operation::Spin(p) => {
                 result = {
                     let split = result.split_at(result.len() - p);
@@ -96,7 +91,17 @@ fn part1(initial: &str, input: &str) -> String {
     result
 }
 
-fn part2(initial: &str, input: &str, count: usize) -> String {
+fn cycle_len(initial: &str, input: &[Operation]) -> usize {
+    let mut cycle_len = 1;
+    let mut changed = part1(initial, input);
+    while changed != initial {
+        changed = part1(&changed, input);
+        cycle_len += 1;
+    }
+    cycle_len
+}
+
+fn part2(initial: &str, input: &[Operation], count: usize) -> String {
     let cycle = cycle_len(initial, input);
     let mut result = initial.to_owned();
     for _ in 0..(count % cycle) {
@@ -118,8 +123,12 @@ fn main() {
         file.read_to_string(&mut contents)
             .expect(&format!("could not read file {}", opt.input.display()));
     }
-    println!("Part 1: {}", part1("abcdefghijklmnop", &contents));
-    println!("Part 2: {}", part2("abcdefghijklmnop", &contents, 1_000_000_000));
+    let instructions = parse(&contents);
+    println!("Part 1: {}", part1("abcdefghijklmnop", &instructions));
+    println!(
+        "Part 2: {}",
+        part2("abcdefghijklmnop", &instructions, 1_000_000_000)
+    );
 }
 
 #[derive(StructOpt, Debug)]
@@ -134,11 +143,11 @@ mod tests {
 
     #[test]
     fn part1_test() {
-        assert_eq!(part1("abcde", "s1,x3/4,pe/b"), "baedc");
+        assert_eq!(part1("abcde", &parse("s1,x3/4,pe/b")), "baedc");
     }
 
     #[test]
     fn part4_test() {
-        assert_eq!(part2("abcde", "s1,x3/4,pe/b", 2), "ceadb");
+        assert_eq!(part2("abcde", &parse("s1,x3/4,pe/b"), 2), "ceadb");
     }
 }
