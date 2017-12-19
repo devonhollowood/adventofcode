@@ -6,3 +6,5 @@ authors = ["Devon Hollowood <devonhollowood@gmail.com>"]
 [dependencies]
 structopt = "0.1.0"
 structopt-derive = "0.1.0"
+num-bigint = "0.1"
+num-traits = "0.1"

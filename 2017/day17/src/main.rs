@@ -1,7 +1,12 @@
+extern crate num_bigint;
+extern crate num_traits;
+
 extern crate structopt;
 #[macro_use]
 extern crate structopt_derive;
 
+use num_bigint::BigUint;
+use num_traits::{pow, One, Zero};
 use structopt::StructOpt;
 
 fn part1(skip: usize) -> usize {
@@ -39,6 +44,34 @@ fn part2(skip: usize) -> usize {
     after_zero
 }
 
+fn bonus() -> BigUint {
+    let skip = 47usize;
+    let mut len = BigUint::one();
+    let mut current_pos = BigUint::one();
+    let mut after_zero_sum = BigUint::zero();
+    let mut item = BigUint::one();
+    while item.clone() <= pow(BigUint::from(10u32), 100) {
+        current_pos = (current_pos.clone() + skip + 1usize) % len.clone();
+        if current_pos == BigUint::zero() {
+            after_zero_sum += item.clone();
+        }
+        len += 1usize; // as if we are inserting
+        item += 1usize;
+        let remaining = len.clone() - 1usize - current_pos.clone();
+        let ignore = if remaining < BigUint::from(skip + 1) {
+            BigUint::zero()
+        } else if remaining.clone() % (skip + 1) == BigUint::zero() {
+            (remaining / (skip + 1)) - BigUint::one()
+        } else {
+            remaining / (skip + 1)
+        };
+        item += ignore.clone();
+        len += ignore.clone();
+        current_pos += ignore * (skip + 1);
+    }
+    after_zero_sum
+}
+
 fn main() {
     let opt = Opt::from_args();
     println!(
@@ -49,6 +82,7 @@ fn main() {
         "Part 2: {}",
         part2(opt.input.parse().expect("Could not read input"))
     );
+    println!("bonus: {}", bonus());
 }
 
 #[derive(StructOpt, Debug)]
