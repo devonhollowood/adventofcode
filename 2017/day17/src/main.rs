@@ -18,12 +18,23 @@ fn part2(skip: usize) -> usize {
     let mut len = 1;
     let mut current_pos = 1;
     let mut after_zero = 0;
-    for item in 1..50_000_001 {
+    let mut item = 0;
+    while item <= 50_000_000 {
         current_pos = (current_pos + skip + 1) % len;
-        len += 1; // as if we are inserting
         if current_pos == 0 {
             after_zero = item
         }
+        len += 1; // as if we are inserting
+        item += 1;
+        let remaining = len - 1 - current_pos;
+        let ignore = if remaining % (skip + 1) == 0 {
+            (remaining / (skip + 1)).max(1) - 1
+        } else {
+            remaining / (skip + 1)
+        };
+        item += ignore;
+        len += ignore;
+        current_pos += ignore * (skip + 1);
     }
     after_zero
 }
