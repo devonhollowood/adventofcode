@@ -1,3 +1,5 @@
+extern crate hound;
+
 extern crate rodio;
 
 extern crate structopt;
@@ -10,7 +12,7 @@ use std::collections::VecDeque;
 use std::error::Error;
 use std::fs::File;
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 type Literal = i64;
 type Address = char;
@@ -334,6 +336,26 @@ fn play(music: &[u32]) {
     sink.sleep_until_end();
 }
 
+fn output(path: &Path, music: &[u32]) {
+    use std::f32::consts::PI;
+    use std::i16;
+
+    let spec = hound::WavSpec {
+        channels: 1,
+        sample_rate: 44_100,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut writer = hound::WavWriter::create(path, spec).unwrap();
+    for note in music {
+        for t in (0..44_100usize / 50).map(|x| x as f32 / 44100.0) {
+            let sample = (t * *note as f32 * 2.0 * PI).sin();
+            let amplitude = f32::from(i16::MAX);
+            writer.write_sample((sample * amplitude) as i16).unwrap();
+        }
+    }
+}
+
 fn main() {
     let opt = Opt::from_args();
     let mut contents = String::new();
@@ -356,13 +378,26 @@ fn main() {
     if opt.play {
         play(&generate_music(&instructions));
     }
+    if let Some(path) = opt.output {
+        output(&path, &generate_music(&instructions));
+    }
 }
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "day13", about = "Advent of code 2017 day 13")]
 struct Opt {
-    #[structopt(help = "Input file", parse(from_os_str))] input: PathBuf,
-    #[structopt(help = "play part 1 sounds", short = "p", long = "play")] play: bool,
+    #[structopt(help = "Input file", parse(from_os_str))]
+    input: PathBuf,
+
+    #[structopt(help = "play part 1 sounds", short = "p", long = "play")]
+    play: bool,
+
+    #[structopt(help = "output to wav file",
+                short = "o",
+                long = "output",
+                parse(from_os_str))
+    ]
+    output: Option<PathBuf>,
 }
 
 #[cfg(test)]
