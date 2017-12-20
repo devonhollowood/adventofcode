@@ -88,18 +88,13 @@ fn traverse(input: &str) -> (String, usize) {
                 if ch != '+' {
                     letters.push(ch)
                 }
-                match vec![Up, Down, Left, Right]
-                    .into_iter()
-                    .filter(|&d| d != direction.reverse())
-                    .filter(|&d| {
-                        if let Ok(p) = position.go(d) {
-                            map[p.0][p.1] != ' '
-                        } else {
-                            false
-                        }
-                    })
-                    .next()
-                {
+                match vec![Up, Down, Left, Right].into_iter().find(|&d| {
+                    d != direction.reverse()
+                        && position
+                            .go(d)
+                            .map(|p| map[p.0][p.1] != ' ')
+                            .unwrap_or(false)
+                }) {
                     Some(dir) => direction = dir,
                     None => break,
                 }
