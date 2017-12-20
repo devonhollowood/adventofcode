@@ -1,3 +1,5 @@
+extern crate rodio;
+
 extern crate structopt;
 #[macro_use]
 extern crate structopt_derive;
@@ -287,6 +289,51 @@ fn part2(instructions: &[Operation]) -> usize {
     send_count
 }
 
+fn generate_music(instructions: &[Operation]) -> Vec<u32> {
+    let mut music = Vec::new();
+    let mut computer = Computer::new(0);
+    loop {
+        let instr = instructions[computer.instruction_ptr];
+        if let Some(rcv) = computer.perform(instr) {
+            music.push(rcv as u32);
+        }
+        if computer.instruction_ptr > instructions.len() {
+            computer.status = Status::Terminated;
+        }
+        match computer.status {
+            Status::Running => {}
+            Status::Waiting => {
+                computer.instruction_ptr += 1;
+                if computer.instruction_ptr >= instructions.len() {
+                    computer.status = Status::Running
+                } else {
+                    computer.status = Status::Terminated;
+                    break;
+                }
+            }
+            Status::Terminated => break,
+        }
+    }
+    music
+}
+
+fn play(music: &[u32]) {
+    use rodio::Source;
+    use rodio::Sink;
+
+    #[allow(deprecated)]
+    let endpoint = rodio::get_default_endpoint().unwrap();
+    let sink = Sink::new(&endpoint);
+
+    for note in music {
+        sink.append(
+            rodio::source::SineWave::new(*note)
+                .take_duration(std::time::Duration::from_millis(20)),
+        );
+    }
+    sink.sleep_until_end();
+}
+
 fn main() {
     let opt = Opt::from_args();
     let mut contents = String::new();
@@ -306,12 +353,16 @@ fn main() {
         part1(&instructions).expect("Could not recover a sound!")
     );
     println!("Part 2: {}", part2(&instructions));
+    if opt.play {
+        play(&generate_music(&instructions));
+    }
 }
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "day13", about = "Advent of code 2017 day 13")]
 struct Opt {
     #[structopt(help = "Input file", parse(from_os_str))] input: PathBuf,
+    #[structopt(help = "play part 1 sounds", short = "p", long = "play")] play: bool,
 }
 
 #[cfg(test)]
