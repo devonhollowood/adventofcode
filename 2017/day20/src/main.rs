@@ -6,11 +6,12 @@ extern crate structopt;
 extern crate structopt_derive;
 
 use structopt::StructOpt;
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Vec3 {
     x: isize,
     y: isize,
@@ -18,15 +19,12 @@ struct Vec3 {
 }
 
 impl Vec3 {
-    fn direction(&self) -> Vec3 {
-        Vec3 {
-            x: self.x.signum(),
-            y: self.y.signum(),
-            z: self.z.signum(),
-        }
-    }
     fn manhattan_magnitude(&self) -> isize {
         self.x.abs() + self.y.abs() + self.z.abs()
+    }
+    fn manhattan_distance(&self, other: &Vec3) -> isize {
+        (self.x - other.x).abs() + (self.y - other.y).abs()
+            + (self.z - other.z).abs()
     }
 }
 
@@ -41,7 +39,7 @@ impl std::ops::Add for Vec3 {
     }
 }
 
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Particle {
     position: Vec3,
     velocity: Vec3,
@@ -57,6 +55,42 @@ impl Particle {
             velocity: new_velocity,
             acceleration: self.acceleration.clone(),
         }
+    }
+    fn done_turning(&self) -> bool {
+        (self.acceleration.x == 0
+            || self.acceleration.x.signum() == self.velocity.x.signum())
+            && (self.acceleration.y == 0
+                || self.acceleration.y.signum() == self.velocity.y.signum())
+            && (self.acceleration.z == 0
+                || self.acceleration.z.signum() == self.velocity.z.signum())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum TrackingStatus {
+    Tracking(Particle, Particle),
+    Safe,
+    Collided,
+}
+
+fn track(a: &Particle, b: &Particle) -> TrackingStatus {
+    // parallel particles are an edge case here
+    if a.velocity == b.velocity && a.acceleration == b.acceleration
+        && a.position != b.position
+    {
+        return TrackingStatus::Safe;
+    }
+    let new_a = a.step();
+    let new_b = b.step();
+    if a.position == b.position {
+        TrackingStatus::Collided
+    } else if a.done_turning() && b.done_turning()
+        && new_a.position.manhattan_distance(&new_b.position)
+            > a.position.manhattan_distance(&b.position)
+    {
+        TrackingStatus::Safe
+    } else {
+        TrackingStatus::Tracking(new_a, new_b)
     }
 }
 
@@ -83,6 +117,38 @@ fn part1(particles: &[Particle]) -> usize {
         .0
 }
 
+fn part2(particles: &[Particle]) -> usize {
+    let mut tracking_pairs =
+        Vec::with_capacity(particles.len() * particles.len() / 2);
+    for (idx_a, a) in particles.iter().enumerate() {
+        tracking_pairs.extend(
+            particles
+                .iter()
+                .enumerate()
+                .skip(idx_a + 1)
+                .map(|(idx_b, b)| ((idx_a, idx_b), (a.clone(), b.clone()))),
+        );
+    }
+    let mut collided = HashSet::new();
+    while !tracking_pairs.is_empty() {
+        let mut new_tracking_pairs = Vec::with_capacity(tracking_pairs.len());
+        for ((idx_a, idx_b), (a, b)) in tracking_pairs.drain(..) {
+            match track(&a, &b) {
+                TrackingStatus::Safe => {}
+                TrackingStatus::Collided => {
+                    collided.insert(idx_a);
+                    collided.insert(idx_b);
+                }
+                TrackingStatus::Tracking(new_a, new_b) => {
+                    new_tracking_pairs.push(((idx_a, idx_b), (new_a, new_b)));
+                }
+            }
+        }
+        tracking_pairs = new_tracking_pairs;
+    }
+    particles.len() - collided.len()
+}
+
 fn main() {
     let opt = Opt::from_args();
     let mut contents = String::new();
@@ -100,10 +166,11 @@ fn main() {
         .to_result()
         .expect("Could not parse input");
     println!("Part 1: {}", part1(&particles));
+    println!("Part 2: {}", part2(&particles));
 }
 
 #[derive(StructOpt, Debug)]
-#[structopt(name = "day13", about = "Advent of code 2017 day 13")]
+#[structopt(name = "day20", about = "Advent of code 2017 day 20")]
 struct Opt {
     #[structopt(help = "Input file", parse(from_os_str))] input: PathBuf,
 }
@@ -121,6 +188,25 @@ mod tests {
             .to_result()
             .unwrap();
         assert_eq!(part1(&[a, b]), 0);
+    }
+
+    #[test]
+    fn part2_test() {
+        let particles = [
+            parsing::particle(b"p=<-6,0,0>, v=<3,0,0>, a=<0,0,0>")
+                .to_result()
+                .unwrap(),
+            parsing::particle(b"p=<-4,0,0>, v=<2,0,0>, a=<0,0,0>")
+                .to_result()
+                .unwrap(),
+            parsing::particle(b"p=<-2,0,0>, v=<1,0,0>, a=<0,0,0>")
+                .to_result()
+                .unwrap(),
+            parsing::particle(b"p=<3,0,0>, v=<-1,0,0>, a=<0,0,0>")
+                .to_result()
+                .unwrap(),
+        ];
+        assert_eq!(part2(&particles), 1);
     }
 }
 
