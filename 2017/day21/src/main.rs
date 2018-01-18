@@ -262,6 +262,13 @@ fn part1(rules: &RuleSet) -> usize {
         .count()
 }
 
+fn part2(rules: &RuleSet) -> usize {
+    itertools::iterate(start(), |g| g.iterate(rules))
+        .nth(18)
+        .unwrap()
+        .count()
+}
+
 fn main() {
     let opt = Opt::from_args();
     let mut contents = String::new();
@@ -278,6 +285,7 @@ fn main() {
     let rule_list = parse(&contents);
     let rules = make_ruleset(&rule_list);
     println!("Part 1: {}", part1(&rules));
+    println!("Part 2: {}", part2(&rules));
 }
 
 #[derive(StructOpt, Debug)]
