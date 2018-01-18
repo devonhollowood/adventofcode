@@ -4,7 +4,6 @@ extern crate structopt;
 #[macro_use]
 extern crate structopt_derive;
 
-use itertools::Itertools;
 use structopt::StructOpt;
 use std::fs::File;
 use std::io::Read;
@@ -40,8 +39,8 @@ impl std::error::Error for GridBuildError {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct Rule {
-    before: Vec<bool>,
-    after: Vec<bool>,
+    before: Grid,
+    after: Grid,
 }
 
 type RuleSet = std::collections::HashMap<Grid, Grid>;
@@ -60,7 +59,10 @@ impl Grid {
         }
     }
 
-    fn from_components(side_len: usize, contents: Vec<bool>) -> Result<Grid, GridBuildError> {
+    fn from_components(
+        side_len: usize,
+        contents: Vec<bool>,
+    ) -> Result<Grid, GridBuildError> {
         if side_len * side_len != contents.len() {
             return Err(GridBuildError::Unsquare);
         }
@@ -135,18 +137,17 @@ impl Grid {
         grids
     }
 
-    fn enhance(&self, rules: &RuleSet) -> Grid {
-        let contents = rules
-            .get(self)
-            .cloned()
-            .map(|g| g.contents)
-            .unwrap_or(self.contents.clone());
-        Self::from_bools(contents).expect("Error enhancing grid")
+    fn enhance(&self, rules: &RuleSet) -> Option<Grid> {
+        rules.get(self).cloned().map(|g| {
+            Self::from_bools(g.contents).expect("Error enhancing grid")
+        })
     }
 
     fn iterate(&self, rules: &RuleSet) -> Grid {
-        Grid::from_subgrids(self.split().iter().map(|grid| grid.enhance(rules)))
-            .expect("Grid Iteration: Invalid subgrid produced")
+        Grid::from_subgrids(self.split().iter().map(|grid| {
+            grid.enhance(rules)
+                .expect(&format!("Rule not found: \n{}", grid))
+        })).expect("Grid Iteration: Invalid subgrid produced")
     }
 
     fn count(&self) -> usize {
@@ -192,13 +193,57 @@ impl std::str::FromStr for Grid {
     }
 }
 
+impl std::fmt::Display for Grid {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        for (pos, val) in self.contents.iter().enumerate() {
+            if pos != 0 && pos % self.side_len == 0 {
+                write!(f, "\n")?
+            }
+            write!(f, "{}", if *val { '#' } else { '.' })?
+        }
+        Ok(())
+    }
+}
 
 fn parse(input: &str) -> Vec<Rule> {
-    unimplemented!()
+    use std::str::FromStr;
+    input
+        .lines()
+        .map(|line| {
+            let (before, after) = line.split_at(
+                line.find("=>").expect(&format!("Invalid line: {}", line)),
+            );
+            Rule {
+                before: Grid::from_str(before)
+                    .expect(&format!("Could not parse grid from {}", before)),
+                after: Grid::from_str(after)
+                    .expect(&format!("Could not parse grid from {}", after)),
+            }
+        })
+        .collect()
 }
 
 fn make_ruleset(rule_list: &[Rule]) -> RuleSet {
-    unimplemented!()
+    let mut rule_set = std::collections::HashMap::new();
+    for rule in rule_list {
+        let mut new_rule = rule.before.clone();
+        rule_set.insert(new_rule.clone(), rule.after.clone());
+        new_rule = new_rule.rotate_ccw();
+        rule_set.insert(new_rule.clone(), rule.after.clone());
+        new_rule = new_rule.rotate_ccw();
+        rule_set.insert(new_rule.clone(), rule.after.clone());
+        new_rule = new_rule.rotate_ccw();
+        rule_set.insert(new_rule.clone(), rule.after.clone());
+        new_rule = new_rule.flip_lr();
+        rule_set.insert(new_rule.clone(), rule.after.clone());
+        new_rule = new_rule.rotate_ccw();
+        rule_set.insert(new_rule.clone(), rule.after.clone());
+        new_rule = new_rule.rotate_ccw();
+        rule_set.insert(new_rule.clone(), rule.after.clone());
+        new_rule = new_rule.rotate_ccw();
+        rule_set.insert(new_rule.clone(), rule.after.clone());
+    }
+    rule_set
 }
 
 fn start() -> Grid {
@@ -212,7 +257,7 @@ fn start() -> Grid {
 
 fn part1(rules: &RuleSet) -> usize {
     itertools::iterate(start(), |g| g.iterate(rules))
-        .nth(6)
+        .nth(5)
         .unwrap()
         .count()
 }
@@ -258,7 +303,12 @@ mod tests {
             Grid::from_str("..##").unwrap(),
         );
         assert_eq!(
-            Grid::from_str("#...##...").unwrap().rotate_ccw().rotate_ccw().rotate_ccw().rotate_ccw(),
+            Grid::from_str("#...##...")
+                .unwrap()
+                .rotate_ccw()
+                .rotate_ccw()
+                .rotate_ccw()
+                .rotate_ccw(),
             Grid::from_str("#...##...").unwrap()
         );
     }
@@ -279,4 +329,72 @@ mod tests {
         );
     }
 
+    #[test]
+    fn split_2_test() {
+        assert_eq!(
+            Grid::from_str("#.##.#|#.#.##|......|.##.##|###...|#.##.#")
+                .unwrap()
+                .split(),
+            vec![
+                Grid::from_str("#.#.").unwrap(),
+                Grid::from_str("###.").unwrap(),
+                Grid::from_str(".###").unwrap(),
+                Grid::from_str("...#").unwrap(),
+                Grid::from_str("..#.").unwrap(),
+                Grid::from_str("..##").unwrap(),
+                Grid::from_str("###.").unwrap(),
+                Grid::from_str("#.##").unwrap(),
+                Grid::from_str("...#").unwrap(),
+            ],
+        )
+    }
+
+    #[test]
+    fn from_subgrids_test() {
+        assert_eq!(
+            Grid::from_subgrids(vec![
+                Grid::from_str("#.#.").unwrap(),
+                Grid::from_str("###.").unwrap(),
+                Grid::from_str(".###").unwrap(),
+                Grid::from_str("...#").unwrap(),
+                Grid::from_str("..#.").unwrap(),
+                Grid::from_str("..##").unwrap(),
+                Grid::from_str("###.").unwrap(),
+                Grid::from_str("#.##").unwrap(),
+                Grid::from_str("...#").unwrap(),
+            ]).unwrap(),
+            Grid::from_str("#.##.#|#.#.##|......|.##.##|###...|#.##.#")
+                .unwrap(),
+        )
+    }
+
+    #[test]
+    fn enhance_test() {
+        let rules: RuleSet = std::iter::once((
+            Grid::from_str("#.#.").unwrap(),
+            Grid::from_str(".##.##.##").unwrap(),
+        )).collect();
+        assert_eq!(
+            Grid::from_str("#.#.").unwrap().enhance(&rules),
+            Some(Grid::from_str(".##.##.##").unwrap())
+        );
+        assert_eq!(Grid::from_str(".#.#").unwrap().enhance(&rules), None);
+    }
+
+    #[test]
+    fn iterate_test() {
+        let input: Vec<Rule> = vec![
+            Rule {
+                before: Grid::from_str("../.#").unwrap(),
+                after: Grid::from_str("##./#../...").unwrap(),
+            },
+            Rule {
+                before: Grid::from_str(".#./..#/###").unwrap(),
+                after: Grid::from_str("#..#/..../..../#..#").unwrap(),
+            },
+        ];
+        let ruleset = make_ruleset(&input);
+        let res = start().iterate(&ruleset).iterate(&ruleset).count();
+        assert_eq!(res, 12);
+    }
 }
