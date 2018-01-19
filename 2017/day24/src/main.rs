@@ -46,6 +46,13 @@ fn parse(input: &str) -> BTreeSet<Component> {
     components
 }
 
+fn strength<Iter>(iter: Iter) -> usize
+where
+    Iter: IntoIterator<Item = Component>,
+{
+    iter.into_iter().map(|c| c.input + c.output).sum()
+}
+
 fn max_strength(start: usize, components: &BTreeSet<Component>) -> usize {
     components
         .iter()
@@ -76,6 +83,50 @@ fn part1(components: &BTreeSet<Component>) -> usize {
     max_strength(0, components)
 }
 
+fn possibilities(
+    start: usize,
+    components: &BTreeSet<Component>,
+) -> Vec<Vec<Component>> {
+    components
+        .iter()
+        .flat_map(|component| {
+            if component.input == start {
+                let mut new_set = components.clone();
+                new_set.remove(component);
+                let mut ps = possibilities(component.output, &new_set);
+                for mut p in &mut ps {
+                    p.push(*component);
+                }
+                ps.push(vec![*component]);
+                ps
+            } else if component.output == start {
+                let mut new_set = components.clone();
+                new_set.remove(component);
+                let mut ps = possibilities(component.input, &new_set);
+                for mut p in &mut ps {
+                    p.push(component.flip());
+                }
+                ps.push(vec![*component]);
+                ps
+            } else {
+                vec![]
+            }
+        })
+        .collect()
+}
+
+fn part2(components: &BTreeSet<Component>) -> usize {
+    possibilities(0, components)
+        .into_iter()
+        .max_by(|a, b| {
+            a.len()
+                .cmp(&b.len())
+                .then_with(|| strength(a.clone()).cmp(&strength(b.clone())))
+        })
+        .map(strength)
+        .unwrap_or_default()
+}
+
 fn main() {
     let opt = Opt::from_args();
     let mut contents = String::new();
@@ -91,6 +142,7 @@ fn main() {
     }
     let components = parse(&contents);
     println!("Part 1: {}", part1(&components));
+    println!("Part 2: {}", part2(&components));
 }
 
 #[derive(StructOpt, Debug)]
@@ -104,19 +156,26 @@ struct Opt {
 mod tests {
     use super::*;
 
+    static INPUT: &str = concat!(
+        "0/2\n",
+        "2/2\n",
+        "2/3\n",
+        "3/4\n",
+        "3/5\n",
+        "0/1\n",
+        "10/1\n",
+        "9/10"
+    );
+
     #[test]
     fn part1_test() {
-        let input = concat!(
-            "0/2\n",
-            "2/2\n",
-            "2/3\n",
-            "3/4\n",
-            "3/5\n",
-            "0/1\n",
-            "10/1\n",
-            "9/10"
-        );
-        let components = parse(input);
+        let components = parse(INPUT);
         assert_eq!(part1(&components), 31);
+    }
+
+    #[test]
+    fn part2_test() {
+        let components = parse(INPUT);
+        assert_eq!(part2(&components), 19);
     }
 }
