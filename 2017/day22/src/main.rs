@@ -2,7 +2,8 @@ extern crate structopt;
 #[macro_use]
 extern crate structopt_derive;
 
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
+use std::default::Default;
 use structopt::StructOpt;
 use std::fs::File;
 use std::io::Read;
@@ -53,29 +54,75 @@ impl Direction {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+enum NodeState {
+    Clean,
+    Weakened,
+    Infected,
+    Flagged,
+}
+
+impl NodeState {
+    fn progress(&mut self) {
+        use NodeState::*;
+        *self = match *self {
+            Clean => Weakened,
+            Weakened => Infected,
+            Infected => Flagged,
+            Flagged => Clean,
+        };
+    }
+    fn toggle(&mut self) {
+        use NodeState::*;
+        *self = match *self {
+            Clean => Infected,
+            Weakened => panic!("Cannot toggle weakened state"),
+            Infected => Clean,
+            Flagged => panic!("Cannot toggle flagged state"),
+        };
+    }
+}
+
+impl Default for NodeState {
+    fn default() -> Self {
+        NodeState::Clean
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 struct Virus {
     loc: Position,
     facing: Direction,
 }
 
 impl Virus {
-    /// Have virus act. Returns true if virus infects a new cell
-    fn act(&mut self, infected: &mut Board) -> bool {
-        if infected.contains(&self.loc) {
-            self.facing = self.facing.turn_right();
-            infected.remove(&self.loc);
-            self.loc = self.loc.go(self.facing);
-            false
-        } else {
-            self.facing = self.facing.turn_left();
-            infected.insert(self.loc);
-            self.loc = self.loc.go(self.facing);
-            true
+    /// Have virus act as in part 1. Returns true if virus infects a new cell
+    fn act1(&mut self, infected: &mut Board) -> bool {
+        use NodeState::*;
+        let loc = self.loc;
+        let state = infected.get(&loc).cloned().unwrap_or_default();
+        // turn
+        match state {
+            Clean => {
+                self.facing = self.facing.turn_left();
+            }
+            Infected => {
+                self.facing = self.facing.turn_right();
+            }
+            _ => panic!("Invalid state for part 1"),
         }
+        // infect
+        infected.entry(loc).or_insert(Clean).toggle();
+        if infected[&loc] == Clean {
+            infected.remove(&loc);
+        }
+        // move
+        self.loc = loc.go(self.facing);
+        state != Infected
+            && infected.get(&loc).cloned().unwrap_or_default() == Infected
     }
 }
 
-type Board = BTreeSet<Position>; // set of infected nodes
+type Board = BTreeMap<Position, NodeState>; // set of infected nodes
 
 fn parse(input: &str) -> (Virus, Board) {
     let bools: Vec<bool> = input
@@ -94,7 +141,7 @@ fn parse(input: &str) -> (Virus, Board) {
         panic!("center undefined");
     }
     let offset = (side_len / 2) as isize;
-    let mut board = BTreeSet::new();
+    let mut board = BTreeMap::new();
     for idx in bools.into_iter().enumerate().filter_map(|(idx, b)| {
         if b {
             Some(idx)
@@ -104,7 +151,7 @@ fn parse(input: &str) -> (Virus, Board) {
     }) {
         let r = offset as isize - (idx / side_len) as isize;
         let c = (idx % side_len) as isize - offset;
-        board.insert(Position(r, c));
+        board.insert(Position(r, c), NodeState::Infected);
     }
     (
         Virus {
@@ -118,7 +165,7 @@ fn parse(input: &str) -> (Virus, Board) {
 fn part1(mut virus: Virus, mut board: Board) -> usize {
     let mut count = 0;
     for _ in 0..10_000 {
-        if virus.act(&mut board) {
+        if virus.act1(&mut board) {
             count += 1;
         }
     }
@@ -157,6 +204,7 @@ mod tests {
 
     #[test]
     fn parse_test() {
+        use NodeState::Infected;
         assert_eq!(
             parse(INPUT),
             (
@@ -164,9 +212,8 @@ mod tests {
                     loc: Position(0, 0),
                     facing: Direction::Up,
                 },
-                [Position(1, 1), Position(0, -1),][..]
-                    .iter()
-                    .cloned()
+                vec![(Position(1, 1), Infected), (Position(0, -1), Infected)]
+                    .into_iter()
                     .collect()
             )
         );
@@ -175,7 +222,7 @@ mod tests {
     #[test]
     fn act_test() {
         let (mut virus, mut board) = parse(INPUT);
-        assert_eq!(virus.act(&mut board), true);
+        assert_eq!(virus.act1(&mut board), true);
         assert_eq!(
             virus,
             Virus {
@@ -183,12 +230,7 @@ mod tests {
                 facing: Direction::Left,
             }
         );
-        assert_eq!(
-            board,
-            vec![Position(0, -1), Position(0, 0), Position(1, 1)]
-                .into_iter()
-                .collect()
-        );
+        assert_eq!(board, parse(concat!("..#\n", "##.\n", "...\n")).1);
     }
 
     #[test]
