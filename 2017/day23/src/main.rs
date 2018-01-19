@@ -111,6 +111,31 @@ fn part1(instructions: &[Operation]) -> usize {
     muls
 }
 
+fn part2() -> usize {
+    let mut b = 106700;
+    let c = 123700;
+    let mut h = 0;
+    loop {
+        let mut prime = true;
+        let mut d = 2;
+        while d * d <= b {
+            if b % d == 0 {
+                prime = false;
+                break;
+            }
+            d += 1;
+        }
+        if ! prime {
+            h += 1;
+        }
+        if b == c {
+            break;
+        }
+        b += 17;
+    }
+    return h;
+}
+
 fn main() {
     let opt = Opt::from_args();
     let mut contents = String::new();
@@ -126,6 +151,7 @@ fn main() {
     }
     let instructions = parse(&contents).expect("Could not parse instructions");
     println!("Part 1: {}", part1(&instructions));
+    println!("Part 2: {}", part2());
 }
 
 #[derive(Debug)]
