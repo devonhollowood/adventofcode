@@ -51,6 +51,15 @@ impl Direction {
             Left => Up,
         }
     }
+    fn reverse(self) -> Direction {
+        use Direction::*;
+        match self {
+            Up => Down,
+            Right => Left,
+            Down => Up,
+            Left => Right,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -117,6 +126,31 @@ impl Virus {
         }
         // move
         self.loc = loc.go(self.facing);
+        // return true if newly infected
+        state != Infected
+            && infected.get(&loc).cloned().unwrap_or_default() == Infected
+    }
+
+    /// Have virus act as in part 2. Returns true if virus infects a new cell
+    fn act2(&mut self, infected: &mut Board) -> bool {
+        use NodeState::*;
+        let loc = self.loc;
+        let state = infected.get(&loc).cloned().unwrap_or_default();
+        // turn
+        self.facing = match state {
+            Clean => self.facing.turn_left(),
+            Weakened => self.facing,
+            Infected => self.facing.turn_right(),
+            Flagged => self.facing.reverse(),
+        };
+        // infect
+        infected.entry(loc).or_insert(Clean).progress();
+        if infected[&loc] == Clean {
+            infected.remove(&loc);
+        }
+        // move
+        self.loc = loc.go(self.facing);
+        // return true if newly infected
         state != Infected
             && infected.get(&loc).cloned().unwrap_or_default() == Infected
     }
@@ -172,6 +206,16 @@ fn part1(mut virus: Virus, mut board: Board) -> usize {
     count
 }
 
+fn part2(mut virus: Virus, mut board: Board, n_steps: usize) -> usize {
+    let mut count = 0;
+    for _ in 0..n_steps {
+        if virus.act2(&mut board) {
+            count += 1;
+        }
+    }
+    count
+}
+
 fn main() {
     let opt = Opt::from_args();
     let mut contents = String::new();
@@ -186,7 +230,8 @@ fn main() {
             .expect(&format!("could not read file {}", opt.input.display()));
     }
     let (virus, board) = parse(&contents);
-    println!("Part 1: {}", part1(virus, board));
+    println!("Part 1: {}", part1(virus, board.clone()));
+    println!("Part 2: {}", part2(virus, board.clone(), 10_000_000));
 }
 
 #[derive(StructOpt, Debug)]
@@ -220,7 +265,7 @@ mod tests {
     }
 
     #[test]
-    fn act_test() {
+    fn act1_test() {
         let (mut virus, mut board) = parse(INPUT);
         assert_eq!(virus.act1(&mut board), true);
         assert_eq!(
@@ -237,5 +282,11 @@ mod tests {
     fn part1_test() {
         let (virus, board) = parse(INPUT);
         assert_eq!(part1(virus, board), 5587);
+    }
+
+    #[test]
+    fn part2_test() {
+        let (virus, board) = parse(INPUT);
+        assert_eq!(part2(virus, board.clone(), 100), 26);
     }
 }
