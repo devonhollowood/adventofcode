@@ -46,7 +46,15 @@ def part1(puzzle):
 
 
 def part2(puzzle):
-    pass
+    instructions = parse(puzzle)
+    grid = np.zeros((1000, 1000), dtype=np.int8)
+    for instr in instructions:
+        grid[instr.loc[0]:(instr.loc[0] + instr.width),
+             instr.loc[1]:(instr.loc[1] + instr.height)] += 1
+    for instr in instructions:
+        if np.all(grid[instr.loc[0]:(instr.loc[0] + instr.width),
+                       instr.loc[1]:(instr.loc[1] + instr.height)] == 1):
+            return instr.id
 
 
 def main():
