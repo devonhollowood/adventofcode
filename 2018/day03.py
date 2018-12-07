@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
-import collections
 from dataclasses import dataclass
-import itertools
 import numpy as np
 import re
 import typing
