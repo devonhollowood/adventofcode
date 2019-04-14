@@ -102,6 +102,23 @@ def part1(puzzle):
 
 def part2(puzzle):
     """ Solve part 2 """
+    shifts = parse(puzzle)
+    time_asleep_at = defaultdict(lambda: defaultdict(lambda: 0))
+    for shift in shifts:
+        for sleep in shift.sleeps:
+            time = sleep.start
+            while time < sleep.end:
+                time_asleep_at[shift.guard][time.minute] += 1
+                time += datetime.timedelta(minutes=1)
+    time_slept, guard, sleepiest_time = max(
+        (time_asleep_at[guard][time], guard, time)
+        for guard in time_asleep_at
+        for time in time_asleep_at[guard]
+    )
+    output = (f'Guard {guard} was the most consistent sleeper.\n'
+              f'  They were asleep at minute {sleepiest_time} on {time_slept} days.\n'
+              f'  Product = {guard * sleepiest_time}.')
+    return output
     pass
 
 
