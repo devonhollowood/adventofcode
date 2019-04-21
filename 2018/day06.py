@@ -3,11 +3,13 @@
 
 import argparse
 from collections import defaultdict
+import itertools
 import re
 import typing
 import unittest
 
 Coord = typing.Tuple[int, int]
+T = typing.TypeVar('T')
 
 
 def parse(puzzle: str) -> typing.List[Coord]:
@@ -47,6 +49,30 @@ def iter_area(upper_left: Coord, lower_right: Coord):
             yield (x, y)
 
 
+def lesser_median(iterable: typing.Iterable[T]) -> T:
+    ''' Return the median element in `iterable`. `iterable` must be comparable.
+        If there are an even number of elements, this will pick the smaller of the
+        two middle elements. E.g. lesser_median([1, 2, 3, 4]) will return 2.
+    '''
+    ordered = sorted(iterable)
+    return ordered[len(ordered) // 2]
+
+
+def find_bound(
+    start: T,
+    produce: typing.Callable[[T], T],
+    in_bounds: typing.Callable[[T], bool],
+) -> typing.Optional[T]:
+    ''' Starting at `start`, repeatedly apply `produce`, and return last value
+        such that `in_bounds` returns true. Returns None if `start` is out of
+        bounds.
+    '''
+    current, previous = start, None
+    while in_bounds(current):
+        previous, current = current, produce(current)
+    return previous
+
+
 def part1(puzzle):
     """ Solve part 1 """
     coords = parse(puzzle)
@@ -66,9 +92,26 @@ def part1(puzzle):
     return max(areas.values())
 
 
-def part2(puzzle):
+def part2(puzzle, dist_limit=10000):
     """ Solve part 2 """
-    pass
+    coords = parse(puzzle)
+
+    def total_dist(p):
+        return sum(manhattan_dist(p, c) for c in coords)
+
+    def in_bounds(p):
+        return total_dist(p) < dist_limit
+
+    median = (lesser_median(p[0] for p in coords), lesser_median(p[1] for p in coords))
+    upper_left = (
+        find_bound(median[0], lambda x: x - 1, lambda x: in_bounds((x, median[1]))),
+        find_bound(median[1], lambda y: y - 1, lambda y: in_bounds((median[0], y))),
+    )
+    lower_right = (
+        find_bound(median[0], lambda x: x + 1, lambda x: in_bounds((x, median[1]))),
+        find_bound(median[1], lambda y: y + 1, lambda y: in_bounds((median[0], y))),
+    )
+    return sum(1 for p in iter_area(upper_left, lower_right) if in_bounds(p))
 
 
 def main():
@@ -92,4 +135,5 @@ class Part1Test(unittest.TestCase):
 
 
 class Part2Test(unittest.TestCase):
-    pass
+    def test_example(self):
+        self.assertEqual(part2('1, 1\n1, 6\n8, 3\n3, 4\n5, 5\n8, 9', dist_limit=32), 16)
