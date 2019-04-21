@@ -7,7 +7,6 @@ import re
 import typing
 import unittest
 
-
 Coord = typing.Tuple[int, int]
 
 
@@ -25,7 +24,7 @@ def parse(puzzle: str) -> typing.List[Coord]:
 
 def manhattan_dist(a: Coord, b: Coord) -> int:
     ''' Manhattan distance between two coordinates '''
-    return abs(a[0]-b[0]) + abs(a[1]-b[1])
+    return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
 
 def iter_border(upper_left: Coord, lower_right: Coord) -> typing.Iterator[Coord]:
@@ -58,8 +57,7 @@ def part1(puzzle):
     upper_left = (min(c[0] for c in coords), min(c[1] for c in coords))
     lower_right = (max(c[0] for c in coords), max(c[1] for c in coords))
 
-    infinite = set(closest(point)
-                   for point in iter_border(upper_left, lower_right))
+    infinite = set(closest(point) for point in iter_border(upper_left, lower_right))
     areas = defaultdict(lambda: 0)
     for point in iter_area(upper_left, lower_right):
         nearest = closest(point)
