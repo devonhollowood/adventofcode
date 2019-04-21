@@ -23,14 +23,12 @@ def parse(puzzle: str) -> typing.List[typing.Tuple[str, str]]:
 
 def part1(puzzle: str) -> str:
     """ Solve part 1 """
-    steps = set()
     requirements: typing.Mapping[str, typing.List[str]] = defaultdict(list)
     reverse_reqs: typing.Mapping[str, typing.List[str]] = defaultdict(list)
     for (step, requirement) in parse(puzzle):
-        steps.add(step)
-        steps.add(requirement)
         requirements[step].append(requirement)
         reverse_reqs[requirement].append(step)
+    steps = set(requirements.keys()) | set(reverse_reqs.keys())
     heap = [step for step in steps if not requirements[step]]
     heapq.heapify(heap)
     complete: typing.Set[str] = set()
@@ -42,12 +40,48 @@ def part1(puzzle: str) -> str:
         for rev_req in reverse_reqs[next_step]:
             if all(r in complete for r in requirements[rev_req]):
                 heapq.heappush(heap, rev_req)
+    if complete != steps:
+        raise AssertionError('Never completed ' + str(complete - steps))
     return final_order
 
 
-def part2(puzzle: str) -> str:
+def part2(puzzle: str, nworkers=5, base_time: int = 60) -> int:
     """ Solve part 2 """
-    pass
+
+    def step_time(step: str) -> int:
+        return base_time + ord(step[0]) - ord('A') + 1
+
+    assert nworkers > 0
+    requirements: typing.Mapping[str, typing.List[str]] = defaultdict(list)
+    reverse_reqs: typing.Mapping[str, typing.List[str]] = defaultdict(list)
+    for (step, requirement) in parse(puzzle):
+        requirements[step].append(requirement)
+        reverse_reqs[requirement].append(step)
+    all_tasks = set(requirements.keys()) | set(reverse_reqs.keys())
+    available_tasks = [task for task in all_tasks if not requirements[task]]
+    heapq.heapify(available_tasks)
+    queued_tasks: typing.List[typing.Tuple[int, str]] = []  # heap of (finish time, task) pairs
+    completed_tasks: typing.Set[str] = set()
+    current_time = 0
+    while available_tasks or queued_tasks:
+        # queue up as many available tasks as possible
+        # postcondition: have at least one queued task, since we started with some available
+        while available_tasks and len(queued_tasks) < nworkers:
+            todo = heapq.heappop(available_tasks)
+            heapq.heappush(queued_tasks, (current_time + step_time(todo), todo))
+
+        # pop off one of the queued tasks
+        assert queued_tasks
+        current_time, completed = heapq.heappop(queued_tasks)
+        completed_tasks.add(completed)
+        # add newly available tasks
+        for rev_req in reverse_reqs[completed]:
+            if all(r in completed_tasks for r in requirements[rev_req]):
+                heapq.heappush(available_tasks, rev_req)
+
+    if completed_tasks != all_tasks:
+        raise AssertionError('Never completed ' + str(all_tasks - completed_tasks))
+    return current_time
 
 
 def main():
@@ -65,7 +99,7 @@ if __name__ == '__main__':
     main()
 
 
-class Part1Test(unittest.TestCase):
+class ExampleTest(unittest.TestCase):
     example = (
         'Step C must be finished before step A can begin.\n'
         'Step C must be finished before step F can begin.\n'
@@ -76,10 +110,8 @@ class Part1Test(unittest.TestCase):
         'Step F must be finished before step E can begin.\n'
     )
 
-    def test_example(self):
+    def test_part1(self):
         self.assertEqual(part1(self.example), 'CABDFE')
 
-
-class Part2Test(unittest.TestCase):
-    def test_example(self):
-        pass
+    def test_part2(self):
+        self.assertEqual(part2(self.example, nworkers=2, base_time=0), 15)
