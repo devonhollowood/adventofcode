@@ -38,6 +38,20 @@ def metadata_sum(tree: Node) -> int:
     return child_sum + sum(tree.metadata)
 
 
+def value(node: Node) -> int:
+    if not node.children:
+        return sum(node.metadata)
+    total = 0
+    for idx in node.metadata:
+        if idx == 0:
+            continue
+        try:
+            total += value(node.children[idx - 1])
+        except IndexError:
+            pass  # skip OOB nodes
+    return total
+
+
 def part1(puzzle: str) -> int:
     """ Solve part 1 """
     tree = parse(puzzle)
@@ -46,7 +60,8 @@ def part1(puzzle: str) -> int:
 
 def part2(puzzle: str) -> int:
     """ Solve part 2 """
-    pass
+    tree = parse(puzzle)
+    return value(tree)
 
 
 def main():
@@ -71,4 +86,4 @@ class ExampleTest(unittest.TestCase):
         self.assertEqual(part1(self.example), 138)
 
     def test_part2(self):
-        pass
+        self.assertEqual(part2(self.example), 66)
