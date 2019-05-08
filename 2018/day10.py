@@ -3,19 +3,20 @@
 
 import argparse
 from dataclasses import dataclass
+from functools import lru_cache
 import re
 import typing
 import unittest
 
 
-@dataclass
+@dataclass(frozen=True)
 class Vector:
     ''' 2D vector '''
     x: int
     y: int
 
 
-@dataclass
+@dataclass(frozen=True)
 class Point:
     ''' One point on the grid '''
     position: Vector
@@ -38,20 +39,24 @@ def bounding_circumference(points: typing.List[Point]) -> int:
     return 2 * (right - left) + 2 * (bottom - top)
 
 
-def run_until_compact(points: typing.List[Point]) -> typing.List[Point]:
-    ''' Return points at their most compact '''
+@lru_cache()
+def run_until_compact(points: typing.List[Point]) -> typing.Tuple[typing.FrozenSet[Point], int]:
+    ''' Return points at their most compact and time taken '''
     # Take advantage of the fact that the bounding box monotonically decreases in circumference,
     # then monotonically increases
+    time = 0
     while True:
         previous = points
         previous_circumference = bounding_circumference(points)
         points = [point.step() for point in points]
+        time = time + 1
         circumference = bounding_circumference(points)
         if circumference > previous_circumference:
-            return previous
+            return (frozenset(previous), time - 1)  # -1 because they want # of intermediate steps
 
 
-def parse(puzzle: str) -> typing.List[Point]:
+@lru_cache()
+def parse(puzzle: str) -> typing.FrozenSet[Point]:
     ''' Parse points list from input puzzle '''
     line_re = re.compile(
         r'position=<\s*(?P<x>-?\d+),\s*(?P<y>-?\d+)> velocity=<\s*(?P<vx>-?\d+),\s*(?P<vy>-?\d+)>')
@@ -63,13 +68,13 @@ def parse(puzzle: str) -> typing.List[Point]:
         points.append(Point(
             position=Vector(x=int(match['x']), y=int(match['y'])),
             velocity=Vector(x=int(match['vx']), y=int(match['vy']))))
-    return points
+    return frozenset(points)
 
 
 def part1(puzzle: str) -> str:
     """ Solve part 1 """
     points = parse(puzzle)
-    compact = run_until_compact(points)
+    compact = run_until_compact(points)[0]
     upper_left = Vector(
         x=min(compact, key=lambda point: point.position.x, default=0).position.x,
         y=min(compact, key=lambda point: point.position.y, default=0).position.y)
@@ -87,7 +92,8 @@ def part1(puzzle: str) -> str:
 
 def part2(puzzle: str) -> int:
     """ Solve part 2 """
-    pass
+    points = parse(puzzle)
+    return run_until_compact(points)[1]
 
 
 def main():
@@ -153,3 +159,6 @@ position=<-3,  6> velocity=< 2, -1>
 
     def test_part1(self):
         self.assertEqual(part1(self.example), self.expected)
+
+    def test_part2(self):
+        self.assertEqual(part2(self.example), 3)
