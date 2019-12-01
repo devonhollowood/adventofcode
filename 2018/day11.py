@@ -11,17 +11,17 @@ import unittest
 def power(x: int, y: int, serial: int) -> int:
     ''' Return power of cell at (x, y) in grid with given serial number '''
     rack_id = x + 10
-    power = rack_id * y
-    power += serial
-    power *= rack_id
-    power = power % 1000 // 100
-    power -= 5
-    return power
+    power_level = rack_id * y
+    power_level += serial
+    power_level *= rack_id
+    power_level = power_level % 1000 // 100
+    power_level -= 5
+    return power_level
 
 
-def square_power(x: int, y: int, serial: int) -> int:
+def square_power(x: int, y: int, serial: int, size: int = 3) -> int:
     ''' total power of 3x3 square with (x, y) as upper-left corner '''
-    return sum(power(i, j, serial) for i in range(x, x + 3) for j in range(y, y + 3))
+    return sum(power(i, j, serial) for i in range(x, x + size) for j in range(y, y + size))
 
 
 def part1(serial: int) -> typing.Tuple[int, int]:
@@ -59,8 +59,10 @@ class ExampleTest(unittest.TestCase):
 
     def test_sq_pow(self):
         examples = {
-            (33, 45, 18): 29,
-            (21, 61, 42): 30,
+            (33, 45, 18, 3): 29,
+            (21, 61, 42, 3): 30,
+            (90, 269, 18, 16): 113,
+            (232, 251, 42, 12): 119,
         }
         for example, expected in examples.items():
             self.assertEqual(square_power(*example), expected)
