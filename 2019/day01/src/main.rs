@@ -8,6 +8,28 @@ fn part1(input: &[isize]) -> isize {
     input.iter().map(|val| val / 3 - 2).sum()
 }
 
+fn extra_fuel(mass: isize) -> isize {
+    let mut total = 0;
+    let mut remainder = mass;
+    loop {
+        remainder = remainder / 3 - 2;
+        if remainder > 0 {
+            total += remainder;
+        } else {
+            break;
+        }
+    }
+    total
+}
+
+fn part2(input: &[isize]) -> isize {
+    input
+        .iter()
+        .map(|val| val / 3 - 2)
+        .map(|mass| mass + extra_fuel(mass))
+        .sum()
+}
+
 fn main() {
     let handle = File::open(Opt::from_args().input).expect("error opening file");
     let input: Vec<_> = BufReader::new(handle)
@@ -19,10 +41,24 @@ fn main() {
         })
         .collect();
     println!("Part 1: {}", part1(&input));
+    println!("Part 2: {}", part2(&input));
 }
 
 #[derive(StructOpt)]
 struct Opt {
     #[structopt(parse(from_os_str))]
     input: PathBuf,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_part2() {
+        let expected = vec![(14, 2), (1969, 966), (100756, 50346)];
+        for (input, output) in expected {
+            assert_eq!(extra_fuel(input), output);
+        }
+    }
 }
