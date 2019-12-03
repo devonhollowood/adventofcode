@@ -88,7 +88,7 @@ fn intersection(a: Segment, b: Segment) -> Option<Position> {
         ) => {
             let ax_range = minmax(ax, ax + dx);
             let by_range = minmax(by, by + dy);
-            if ax_range.0 < bx && bx < ax_range.1 && by_range.0 < ay && ay < by_range.1 {
+            if ax_range.0 <= bx && bx <= ax_range.1 && by_range.0 <= ay && ay <= by_range.1 {
                 Some((bx, ay))
             } else {
                 None
@@ -106,7 +106,7 @@ fn intersection(a: Segment, b: Segment) -> Option<Position> {
         ) => {
             let bx_range = minmax(bx, bx + dx);
             let ay_range = minmax(ay, ay + dy);
-            if bx_range.0 < ax && ax < bx_range.1 && ay_range.0 < by && by < ay_range.1 {
+            if bx_range.0 <= ax && ax <= bx_range.1 && ay_range.0 <= by && by <= ay_range.1 {
                 Some((ax, by))
             } else {
                 None
@@ -127,9 +127,55 @@ fn part1(first: &Wire, second: &Wire) -> isize {
         .iter()
         .flat_map(|seg1| second.iter().map(|seg2| (seg1, seg2)).collect::<Vec<_>>())
         .filter_map(|(&a, &b)| intersection(a, b))
+        .filter(|pos| *pos != (0, 0))
         .min_by_key(|pos| manhattan_dist(pos, &(0, 0)))
         .expect("No intersections found");
     manhattan_dist(&closest, &(0, 0))
+}
+
+fn time_to_point(wire: &Wire, point: Position) -> Option<isize> {
+    use Direction::*;
+    let mut travelled = 0;
+    for Segment { origin, direction } in wire.segments() {
+        match direction {
+            Right(dx) => {
+                let x_range = minmax(origin.0, origin.0 + dx);
+                if origin.1 == point.1 && x_range.0 <= point.0 && point.0 <= x_range.1 {
+                    return Some(travelled + (origin.0 - point.0).abs());
+                }
+                travelled += dx.abs();
+            }
+            Up(dy) => {
+                let y_range = minmax(origin.1, origin.1 + dy);
+                if origin.0 == point.0 && y_range.0 <= point.1 && point.1 <= y_range.1 {
+                    return Some(travelled + (origin.1 - point.1).abs());
+                }
+                travelled += dy.abs();
+            }
+        }
+    }
+    None
+}
+
+fn part2(first: &Wire, second: &Wire) -> isize {
+    let first_segs = first.segments();
+    let second_segs = second.segments();
+    first_segs
+        .iter()
+        .flat_map(|seg1| {
+            second_segs
+                .iter()
+                .map(|seg2| (seg1, seg2))
+                .collect::<Vec<_>>()
+        })
+        .filter_map(|(&a, &b)| intersection(a, b))
+        .filter(|pos| *pos != (0, 0))
+        .map(|pos| {
+            time_to_point(first, pos).expect("first never reaches pos")
+                + time_to_point(second, pos).expect("second never reaches pos")
+        })
+        .min()
+        .expect("No intersections found")
 }
 
 fn main() {
@@ -143,6 +189,7 @@ fn main() {
     let first = input.get(0).unwrap();
     let second = input.get(1).unwrap();
     println!("Part 1: {}", part1(first, second));
+    println!("Part 2: {}", part2(first, second));
 }
 
 #[derive(StructOpt)]
@@ -177,6 +224,33 @@ mod tests {
         for (input, output) in expected {
             assert_eq!(
                 part1(&input.0.parse().unwrap(), &input.1.parse().unwrap()),
+                output
+            );
+        }
+    }
+
+    #[test]
+    fn test_part2() {
+        let expected = vec![
+            (("R8,U5,L5,D3", "U7,R6,D4,L4"), 30),
+            (
+                (
+                    "R75,D30,R83,U83,L12,D49,R71,U7,L72",
+                    "U62,R66,U55,R34,D71,R55,D58,R83",
+                ),
+                610,
+            ),
+            (
+                (
+                    "R98,U47,R26,D63,R33,U87,L62,D20,R33,U53,R51",
+                    "U98,R91,D20,R16,D67,R40,U7,R15,U6,R7",
+                ),
+                410,
+            ),
+        ];
+        for (input, output) in expected {
+            assert_eq!(
+                part2(&input.0.parse().unwrap(), &input.1.parse().unwrap()),
                 output
             );
         }
