@@ -33,6 +33,21 @@ fn part1(input: &[isize]) -> isize {
     input[0]
 }
 
+fn part2(input: &[isize]) -> isize {
+    for noun in 0..99 {
+        for verb in 0..=noun {
+            let mut tape = input.to_vec();
+            tape[1] = noun;
+            tape[2] = verb;
+            run_program(&mut tape);
+            if tape[0] == 19_690_720 {
+                return 100 * noun + verb;
+            }
+        }
+    }
+    panic!("Input not found")
+}
+
 fn main() {
     let input: Vec<_> = std::fs::read_to_string(Opt::from_args().input)
         .expect("error reading file")
@@ -44,6 +59,7 @@ fn main() {
         })
         .collect();
     println!("Part 1: {}", part1(&input));
+    println!("Part 2: {}", part2(&input));
 }
 
 #[derive(StructOpt)]
