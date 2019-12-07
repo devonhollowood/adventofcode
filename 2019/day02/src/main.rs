@@ -2,11 +2,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 
 fn part1(input: &[isize]) -> isize {
-    let mut input = input.to_vec();
-    input[1] = 12;
-    input[2] = 2;
-    intcode::run_tape(&mut input);
-    input[0]
+    intcode::compute(12, 2, input.to_vec())
 }
 
 fn part2(input: &[isize]) -> isize {
