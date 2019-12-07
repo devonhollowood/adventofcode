@@ -2,13 +2,21 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 
 fn part1(input: &[isize]) -> isize {
-    intcode::compute(12, 2, input.to_vec())
+    intcode::Interpreter::new(input)
+        .run_with_noun_and_verb(12, 2)
+        .unwrap_or_else(|err| panic!("Error running intcode: {:?}", err))
+        .first_elem()
 }
 
 fn part2(input: &[isize]) -> isize {
     for noun in 0..99 {
         for verb in 0..=noun {
-            if intcode::compute(noun, verb, input.to_vec()) == 1969_0720 {
+            if intcode::Interpreter::new(input)
+                .run_with_noun_and_verb(noun, verb)
+                .unwrap_or_else(|err| panic!("Error running intcode: {:?}", err))
+                .first_elem()
+                == 1969_0720
+            {
                 return 100 * noun + verb;
             }
         }
