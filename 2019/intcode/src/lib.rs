@@ -11,6 +11,8 @@ pub enum ProgramError {
     InvalidAddress(isize),
     /// Expected a position parameter, but received a non-position parameter
     ExpectedPosition,
+    /// Ran out of input
+    NoMoreInput,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -121,7 +123,6 @@ impl<'a> Interpreter<'a> {
     /// Run a single instruction, mutating self as necessary. On success, return a boolean
     /// expressing whether program should terminate
     fn run_instruction(&mut self, instruction: isize) -> Result<bool, ProgramError> {
-        use ProgramError::*;
         let opcode = instruction % 100;
         let parameter_mode = instruction / 100;
         match opcode {
@@ -140,19 +141,19 @@ impl<'a> Interpreter<'a> {
             3 => {
                 let mut params = [Parameter::default(); 1];
                 self.get_params(parameter_mode, &mut params)?;
-                *self.deref_mut(params[0])? = self.input[0];
-                self.input = &self.input[1..];
+                let (input, rest) = self.input.split_first().ok_or(ProgramError::NoMoreInput)?;
+                *self.deref_mut(params[0])? = *input;
+                self.input = rest;
                 self.position += 2;
             }
             4 => {
                 let mut params = [Parameter::default(); 1];
                 self.get_params(parameter_mode, &mut params)?;
                 self.output.push(self.value_of(params[0]));
-                self.input = &self.input[1..];
                 self.position += 2;
             }
             99 => return Ok(true),
-            _ => return Err(UnknownOpcode(opcode)),
+            _ => return Err(ProgramError::UnknownOpcode(opcode)),
         }
         Ok(false)
     }
