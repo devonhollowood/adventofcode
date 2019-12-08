@@ -12,7 +12,12 @@ fn part1(tape: &[isize]) -> isize {
     *final_result
 }
 
-// fn part2(tape: &[isize]) -> isize {}
+fn part2(tape: &[isize]) -> isize {
+    let output = intcode::Interpreter::with_input(&tape, &[5])
+        .run()
+        .unwrap_or_else(|err| panic!("Error running intcode: {:?}", err));
+    output.output()[0]
+}
 
 fn main() {
     let input: Vec<_> = std::fs::read_to_string(Opt::from_args().input)
@@ -25,7 +30,7 @@ fn main() {
         })
         .collect();
     println!("Part 1: {}", part1(&input));
-    // println!("Part 2: {}", part2(&input));
+    println!("Part 2: {}", part2(&input));
 }
 
 #[derive(StructOpt)]
