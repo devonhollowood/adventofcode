@@ -127,18 +127,21 @@ impl<'a> Interpreter<'a> {
         let parameter_mode = instruction / 100;
         match opcode {
             1 => {
+                // add
                 let mut params = [Parameter::default(); 3];
                 self.get_params(parameter_mode, &mut params)?;
                 *self.deref_mut(params[2])? = self.value_of(params[0]) + self.value_of(params[1]);
                 self.position += 4;
             }
             2 => {
+                // multiply
                 let mut params = [Parameter::default(); 3];
                 self.get_params(parameter_mode, &mut params)?;
                 *self.deref_mut(params[2])? = self.value_of(params[0]) * self.value_of(params[1]);
                 self.position += 4;
             }
             3 => {
+                // input
                 let mut params = [Parameter::default(); 1];
                 self.get_params(parameter_mode, &mut params)?;
                 let (input, rest) = self.input.split_first().ok_or(ProgramError::NoMoreInput)?;
@@ -147,15 +150,62 @@ impl<'a> Interpreter<'a> {
                 self.position += 2;
             }
             4 => {
+                // output
                 let mut params = [Parameter::default(); 1];
                 self.get_params(parameter_mode, &mut params)?;
                 self.output.push(self.value_of(params[0]));
                 self.position += 2;
             }
+            5 => {
+                // jump if true
+                let mut params = [Parameter::default(); 2];
+                self.get_params(parameter_mode, &mut params)?;
+                if self.value_of(params[0]) != 0 {
+                    let new_pos = self.value_of(params[1]);
+                    self.position = usize::try_from(new_pos)
+                        .map_err(|_| ProgramError::InvalidAddress(new_pos))?;
+                } else {
+                    self.position += 3;
+                }
+            }
+            6 => {
+                // jump if false
+                let mut params = [Parameter::default(); 2];
+                self.get_params(parameter_mode, &mut params)?;
+                if self.value_of(params[0]) == 0 {
+                    let new_pos = self.value_of(params[1]);
+                    self.position = usize::try_from(new_pos)
+                        .map_err(|_| ProgramError::InvalidAddress(new_pos))?;
+                } else {
+                    self.position += 3;
+                }
+            }
+            7 => {
+                // less than
+                let mut params = [Parameter::default(); 3];
+                self.get_params(parameter_mode, &mut params)?;
+                if self.value_of(params[0]) < self.value_of(params[1]) {
+                    *self.deref_mut(params[2])? = 1;
+                } else {
+                    *self.deref_mut(params[2])? = 0;
+                }
+                self.position += 4;
+            }
+            8 => {
+                // equals
+                let mut params = [Parameter::default(); 3];
+                self.get_params(parameter_mode, &mut params)?;
+                if self.value_of(params[0]) == self.value_of(params[1]) {
+                    *self.deref_mut(params[2])? = 1;
+                } else {
+                    *self.deref_mut(params[2])? = 0;
+                }
+                self.position += 4;
+            }
             99 => return Ok(true),
             _ => return Err(ProgramError::UnknownOpcode(opcode)),
         }
-        Ok(false)
+        Ok(self.position > self.tape.len())
     }
 }
 
@@ -196,5 +246,49 @@ mod tests {
             let result = Interpreter::new(&input).run().map(|out| out.tape);
             assert_eq!(result, Ok(output));
         }
+    }
+
+    #[test]
+    fn test_less() -> Result<(), ProgramError> {
+        let tapes = vec![
+            vec![3, 9, 7, 9, 10, 9, 4, 9, 99, -1, 8],
+            vec![3, 3, 1107, -1, 8, 3, 4, 3, 99],
+        ];
+        for tape in tapes {
+            for input in &[7, 8, 9] {
+                let result = Interpreter::with_input(&tape, &[*input]).run()?;
+                assert_eq!(result.output()[0], (*input < 8) as isize);
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_equal() -> Result<(), ProgramError> {
+        let tapes = vec![
+            vec![3, 9, 8, 9, 10, 9, 4, 9, 99, -1, 8],
+            vec![3, 3, 1108, -1, 8, 3, 4, 3, 99],
+        ];
+        for tape in tapes {
+            for input in &[7, 8, 9] {
+                let result = Interpreter::with_input(&tape, &[*input]).run()?;
+                assert_eq!(result.output()[0], (*input == 8) as isize);
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_run_with_inputs_long() -> Result<(), ProgramError> {
+        let tape = vec![
+            3, 21, 1008, 21, 8, 20, 1005, 20, 22, 107, 8, 21, 20, 1006, 20, 31, 1106, 0, 36, 98, 0,
+            0, 1002, 21, 125, 20, 4, 20, 1105, 1, 46, 104, 999, 1105, 1, 46, 1101, 1000, 1, 20, 4,
+            20, 1105, 1, 46, 98, 99,
+        ];
+        for (input, expected) in &[(7, 999), (8, 1000), (9, 1001)] {
+            let result = Interpreter::with_input(&tape, &[*input]).run()?;
+            assert_eq!(result.output()[0], *expected);
+        }
+        Ok(())
     }
 }
