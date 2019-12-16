@@ -8,4 +8,4 @@ edition = "2018"
 
 [dependencies]
 structopt = "0.3"
-intcode = { path = "../intcode", version = "0.2" }
+intcode = { path = "../intcode", version = "0.3" }

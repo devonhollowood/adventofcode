@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::convert::TryFrom;
 
 /// Intcode Programming error
@@ -27,51 +28,78 @@ impl Default for Parameter {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Interpreter<'a> {
+#[derive(Debug, Clone, PartialEq)]
+pub struct Interpreter {
     tape: Vec<isize>,
     position: usize,
-    input: &'a [isize],
+    input: VecDeque<isize>,
     output: Vec<isize>,
 }
 
-impl<'a> Interpreter<'a> {
+impl Interpreter {
     /// Set up a new interpreter with the given program tape
-    pub fn new(tape: &[isize]) -> Self {
-        Self::with_input(tape, &[])
-    }
-    /// Set up a new interpreter with the given program tape and input
-    pub fn with_input(tape: &[isize], input: &'a [isize]) -> Self {
+    pub fn new(tape: Vec<isize>) -> Self {
         Self {
-            tape: tape.to_vec(),
+            tape,
             position: 0,
-            input,
+            input: VecDeque::new(),
             output: Vec::new(),
         }
     }
 
+    /// Set interpreter input
+    pub fn with_input(self, input: &[isize]) -> Self {
+        Self {
+            input: input.iter().copied().collect(),
+            ..self
+        }
+    }
+
+    /// Set interpreter position
+    pub fn with_position(self, position: usize) -> Self {
+        Self { position, ..self }
+    }
+
     /// Run the interpreter
-    pub fn run(mut self) -> Result<Output, ProgramError> {
+    pub fn run(mut self) -> Result<Output, (ProgramError, Self)> {
         loop {
             let instruction = self.tape[self.position];
-            if self.run_instruction(instruction)? {
-                break;
+            match self.run_instruction(instruction) {
+                Ok(true) => break,
+                Ok(false) => continue,
+                Err(err) => return Err((err, self)),
             }
         }
         Ok(Output {
             tape: self.tape,
             output: self.output,
+            position: self.position,
         })
     }
 
+    /// Run program with given noun and verb
     pub fn run_with_noun_and_verb(
         mut self,
         noun: isize,
         verb: isize,
-    ) -> Result<Output, ProgramError> {
+    ) -> Result<Output, (ProgramError, Self)> {
         self.tape[1] = noun;
         self.tape[2] = verb;
         self.run()
+    }
+
+    /// Get current output stream. This is useful when called on an `Interpreter` which was
+    /// returned as part of an `Err`, as it may be useful to look at the output stream before
+    /// resuming.
+    pub fn output(&self) -> &[isize] {
+        &self.output
+    }
+
+    /// Get current input stream. This is useful when called on an `Interpreter` which was
+    /// returned as part of an `Err`, as it may be useful to look at the input stream before
+    /// resuming.
+    pub fn input(&self) -> Vec<isize> {
+        self.input.iter().copied().collect()
     }
 
     fn deref_mut(&mut self, param: Parameter) -> Result<&mut isize, ProgramError> {
@@ -144,9 +172,8 @@ impl<'a> Interpreter<'a> {
                 // input
                 let mut params = [Parameter::default(); 1];
                 self.get_params(parameter_mode, &mut params)?;
-                let (input, rest) = self.input.split_first().ok_or(ProgramError::NoMoreInput)?;
-                *self.deref_mut(params[0])? = *input;
-                self.input = rest;
+                let input = self.input.pop_front().ok_or(ProgramError::NoMoreInput)?;
+                *self.deref_mut(params[0])? = input;
                 self.position += 2;
             }
             4 => {
@@ -209,9 +236,11 @@ impl<'a> Interpreter<'a> {
     }
 }
 
+/// Output of program
 pub struct Output {
     output: Vec<isize>,
     tape: Vec<isize>,
+    position: usize,
 }
 
 impl Output {
@@ -220,6 +249,12 @@ impl Output {
     }
     pub fn first_elem(&self) -> isize {
         self.tape[0]
+    }
+    pub fn tape(&self) -> &[isize] {
+        &self.tape
+    }
+    pub fn position(&self) -> usize {
+        self.position
     }
 }
 
@@ -243,7 +278,7 @@ mod tests {
             ),
         ];
         for (input, output) in expected {
-            let result = Interpreter::new(&input).run().map(|out| out.tape);
+            let result = Interpreter::new(input.to_vec()).run().map(|out| out.tape);
             assert_eq!(result, Ok(output));
         }
     }
@@ -256,7 +291,10 @@ mod tests {
         ];
         for tape in tapes {
             for input in &[7, 8, 9] {
-                let result = Interpreter::with_input(&tape, &[*input]).run()?;
+                let result = Interpreter::new(tape.to_vec())
+                    .with_input(&[*input])
+                    .run()
+                    .map_err(|(err, _)| err)?;
                 assert_eq!(result.output()[0], (*input < 8) as isize);
             }
         }
@@ -271,7 +309,10 @@ mod tests {
         ];
         for tape in tapes {
             for input in &[7, 8, 9] {
-                let result = Interpreter::with_input(&tape, &[*input]).run()?;
+                let result = Interpreter::new(tape.to_vec())
+                    .with_input(&[*input])
+                    .run()
+                    .map_err(|(err, _)| err)?;
                 assert_eq!(result.output()[0], (*input == 8) as isize);
             }
         }
@@ -286,7 +327,10 @@ mod tests {
             20, 1105, 1, 46, 98, 99,
         ];
         for (input, expected) in &[(7, 999), (8, 1000), (9, 1001)] {
-            let result = Interpreter::with_input(&tape, &[*input]).run()?;
+            let result = Interpreter::new(tape.to_vec())
+                .with_input(&[*input])
+                .run()
+                .map_err(|(err, _)| err)?;
             assert_eq!(result.output()[0], *expected);
         }
         Ok(())

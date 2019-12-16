@@ -9,12 +9,45 @@ fn part1(tape: &[isize]) -> isize {
             let mut signal = 0;
             for phase in ordering {
                 let input = [phase, signal];
-                let interpreter = intcode::Interpreter::with_input(tape, &input);
+                let interpreter = intcode::Interpreter::new(tape.to_vec()).with_input(&input);
                 let output = interpreter
                     .run()
                     .unwrap_or_else(|err| panic!("Invalid program: {:?}", err));
                 assert_eq!(output.output().len(), 1);
                 signal = output.output()[0];
+            }
+            signal
+        })
+        .max()
+        .expect("Expected >0 possible permutations")
+}
+
+fn part2(tape: &[isize]) -> isize {
+    use itertools::Itertools;
+    (5..=9)
+        .permutations(5)
+        .map(|ordering| {
+            let mut signal = 0;
+            let mut inputs: Vec<_> = ordering.iter().map(|phase| vec![*phase]).collect();
+            let mut interpreters = vec![intcode::Interpreter::new(tape.to_vec()); 5];
+            for amp in (0..=4).cycle() {
+                let mut input = inputs[amp].clone();
+                input.push(signal);
+                let interpreter = interpreters[amp].clone().with_input(&input);
+                match interpreter.run() {
+                    Ok(output) => {
+                        signal = *output.output().last().expect("Empty output stream");
+                        if amp == 4 {
+                            break;
+                        }
+                    }
+                    Err((intcode::ProgramError::NoMoreInput, int)) => {
+                        signal = *int.output().last().expect("Empty output stream");
+                        inputs[amp] = int.input();
+                        interpreters[amp] = int.with_input(&inputs[amp]);
+                    }
+                    Err(err) => panic!("Invalid program: {:?}", err),
+                };
             }
             signal
         })
@@ -33,6 +66,7 @@ fn main() {
         })
         .collect();
     println!("Part 1: {}", part1(&input));
+    println!("Part 2: {}", part2(&input));
 }
 
 #[derive(StructOpt)]
@@ -71,6 +105,30 @@ mod tests {
         ];
         for (input, output) in &expected {
             assert_eq!(part1(input), *output);
+        }
+    }
+
+    #[test]
+    fn test_part2() {
+        let expected = [
+            (
+                vec![
+                    3, 26, 1001, 26, -4, 26, 3, 27, 1002, 27, 2, 27, 1, 27, 26, 27, 4, 27, 1001,
+                    28, -1, 28, 1005, 28, 6, 99, 0, 0, 5,
+                ],
+                139629729,
+            ),
+            (
+                vec![
+                    3, 52, 1001, 52, -5, 52, 3, 53, 1, 52, 56, 54, 1007, 54, 5, 55, 1005, 55, 26,
+                    1001, 54, -5, 54, 1105, 1, 12, 1, 53, 54, 53, 1008, 54, 0, 55, 1001, 55, 1, 55,
+                    2, 53, 55, 53, 4, 53, 1001, 56, -1, 56, 1005, 56, 6, 99, 0, 0, 0, 0, 10,
+                ],
+                18216,
+            ),
+        ];
+        for (input, output) in &expected {
+            assert_eq!(part2(input), *output);
         }
     }
 }

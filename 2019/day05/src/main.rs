@@ -2,7 +2,8 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 
 fn part1(tape: &[isize]) -> isize {
-    let output = intcode::Interpreter::with_input(&tape, &[1])
+    let output = intcode::Interpreter::new(tape.to_vec())
+        .with_input(&[1])
         .run()
         .unwrap_or_else(|err| panic!("Error running intcode: {:?}", err));
     let (final_result, test_results) = output.output().split_last().expect("No output produced");
@@ -13,7 +14,8 @@ fn part1(tape: &[isize]) -> isize {
 }
 
 fn part2(tape: &[isize]) -> isize {
-    let output = intcode::Interpreter::with_input(&tape, &[5])
+    let output = intcode::Interpreter::new(tape.to_vec())
+        .with_input(&[5])
         .run()
         .unwrap_or_else(|err| panic!("Error running intcode: {:?}", err));
     output.output()[0]
