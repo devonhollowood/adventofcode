@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -46,6 +47,12 @@ impl<'a> Layer<'a> {
             .chunks(self.width)
             .map(move |chunk| Row { data: chunk })
     }
+
+    fn row(&self, n: usize) -> Row {
+        Row {
+            data: &self.data[(n * self.width)..((n + 1) * self.width)],
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -56,6 +63,10 @@ struct Row<'a> {
 impl<'a> Row<'a> {
     fn pixels(&self) -> impl Iterator<Item = &'a Color> {
         self.data.iter()
+    }
+
+    fn col(&self, n: usize) -> Color {
+        self.data[n]
     }
 }
 
@@ -79,6 +90,27 @@ fn part1(image: &Image) -> usize {
     ones * twos
 }
 
+fn part2(image: &Image) -> String {
+    (0..image.height)
+        .map(|row| {
+            (0..image.width)
+                .map(|col| {
+                    image
+                        .layers()
+                        .map(|layer| layer.row(row).col(col))
+                        .find(|pix| *pix != 2)
+                        .unwrap_or(2)
+                })
+                .map(|pix| match pix {
+                    0 => '.',
+                    1 => '*',
+                    _ => '?',
+                })
+                .join("")
+        })
+        .join("\n")
+}
+
 fn main() {
     let input = Image::new(
         25,
@@ -90,6 +122,7 @@ fn main() {
             .map(|n| n as Color),
     );
     println!("Part 1: {}", part1(&input));
+    println!("Part 2:\n{}", part2(&input));
 }
 
 #[derive(StructOpt)]
@@ -106,5 +139,11 @@ mod tests {
     fn test_part1() {
         let input = Image::new(3, 2, vec![1, 1, 2, 3, 1, 2, 3, 4, 5, 0, 1, 2]);
         assert_eq!(part1(&input), 6);
+    }
+
+    #[test]
+    fn test_part2() {
+        let input = Image::new(2, 2, vec![0, 2, 2, 2, 1, 1, 2, 2, 2, 2, 1, 2, 0, 0, 0, 0]);
+        assert_eq!(part2(&input), ".*\n*.");
     }
 }
