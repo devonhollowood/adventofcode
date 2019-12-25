@@ -1,5 +1,4 @@
 use std::collections::VecDeque;
-use std::convert::TryFrom;
 
 /// Intcode Programming error
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -18,8 +17,9 @@ pub enum ProgramError {
 
 #[derive(Debug, Clone, Copy)]
 enum Parameter {
-    Ptr(usize),
+    Ptr(isize),
     Value(isize),
+    Relative(isize),
 }
 
 impl Default for Parameter {
@@ -30,10 +30,11 @@ impl Default for Parameter {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Interpreter {
-    tape: Vec<isize>,
-    position: usize,
+    tape: Vec<isize>, // values should only be accessed through deref_mut and value_of
+    position: isize,
     input: VecDeque<isize>,
     output: Vec<isize>,
+    relative_base: isize,
 }
 
 impl Interpreter {
@@ -44,6 +45,7 @@ impl Interpreter {
             position: 0,
             input: VecDeque::new(),
             output: Vec::new(),
+            relative_base: 0,
         }
     }
 
@@ -57,13 +59,19 @@ impl Interpreter {
 
     /// Set interpreter position
     pub fn with_position(self, position: usize) -> Self {
-        Self { position, ..self }
+        Self {
+            position: position as isize,
+            ..self
+        }
     }
 
     /// Run the interpreter
     pub fn run(mut self) -> Result<Output, (ProgramError, Self)> {
         loop {
-            let instruction = self.tape[self.position];
+            let instruction = match self.value_of(Parameter::Ptr(self.position)) {
+                Ok(instr) => instr,
+                Err(e) => return Err((e, self)),
+            };
             match self.run_instruction(instruction) {
                 Ok(true) => break,
                 Ok(false) => continue,
@@ -73,7 +81,7 @@ impl Interpreter {
         Ok(Output {
             tape: self.tape,
             output: self.output,
-            position: self.position,
+            position: self.position as usize,
         })
     }
 
@@ -103,17 +111,35 @@ impl Interpreter {
     }
 
     fn deref_mut(&mut self, param: Parameter) -> Result<&mut isize, ProgramError> {
-        match param {
-            Parameter::Ptr(idx) => Ok(&mut self.tape[idx]),
-            Parameter::Value(_) => Err(ProgramError::ExpectedPosition),
+        let idx = match param {
+            Parameter::Ptr(idx) => idx,
+            Parameter::Value(_) => return Err(ProgramError::ExpectedPosition),
+            Parameter::Relative(diff) => self.relative_base + diff,
+        };
+        if idx < 0 {
+            return Err(ProgramError::InvalidAddress(idx));
         }
+        let idx = idx as usize;
+        if idx >= self.tape.len() {
+            self.tape.resize(idx + 1, 0)
+        }
+        Ok(&mut self.tape[idx])
     }
 
-    fn value_of(&self, param: Parameter) -> isize {
-        match param {
-            Parameter::Ptr(idx) => self.tape[idx],
-            Parameter::Value(val) => val,
+    fn value_of(&mut self, param: Parameter) -> Result<isize, ProgramError> {
+        let idx = match param {
+            Parameter::Ptr(idx) => idx,
+            Parameter::Value(val) => return Ok(val),
+            Parameter::Relative(diff) => self.relative_base + diff,
+        };
+        if idx < 0 {
+            return Err(ProgramError::InvalidAddress(idx));
         }
+        let idx = idx as usize;
+        if idx >= self.tape.len() {
+            self.tape.resize(idx + 1, 0)
+        }
+        Ok(self.tape[idx])
     }
 
     /// Fill the given buffer with parameters for an opcode.
@@ -122,27 +148,22 @@ impl Interpreter {
     /// Assumes current program position is on the opcode for which we are filling in the
     /// parameters.
     fn get_params(
-        &self,
+        &mut self,
         parameter_mode: isize,
         buffer: &mut [Parameter],
     ) -> Result<(), ProgramError> {
         use ProgramError::*;
         let mut mode = parameter_mode;
         for (offset, elem) in buffer.iter_mut().enumerate() {
-            let value: isize = self.tape[self.position + offset + 1];
-            match mode % 10 {
-                0 => {
-                    // position mode
-                    *elem = Parameter::Ptr(
-                        usize::try_from(value).map_err(|_| ProgramError::InvalidAddress(value))?,
-                    );
-                }
-                1 => {
-                    // immediate mode
-                    *elem = Parameter::Value(value);
-                }
+            // using value_of here lets us safely read tape positions
+            let value: isize =
+                self.value_of(Parameter::Ptr(self.position + offset as isize + 1))?;
+            *elem = match mode % 10 {
+                0 => Parameter::Ptr(value),      // position mode
+                1 => Parameter::Value(value),    // immediate mode
+                2 => Parameter::Relative(value), // relative mode
                 _ => return Err(InvalidParameterMode(parameter_mode)),
-            }
+            };
             mode /= 10;
         }
         Ok(())
@@ -158,14 +179,16 @@ impl Interpreter {
                 // add
                 let mut params = [Parameter::default(); 3];
                 self.get_params(parameter_mode, &mut params)?;
-                *self.deref_mut(params[2])? = self.value_of(params[0]) + self.value_of(params[1]);
+                *self.deref_mut(params[2])? =
+                    self.value_of(params[0])? + self.value_of(params[1])?;
                 self.position += 4;
             }
             2 => {
                 // multiply
                 let mut params = [Parameter::default(); 3];
                 self.get_params(parameter_mode, &mut params)?;
-                *self.deref_mut(params[2])? = self.value_of(params[0]) * self.value_of(params[1]);
+                *self.deref_mut(params[2])? =
+                    self.value_of(params[0])? * self.value_of(params[1])?;
                 self.position += 4;
             }
             3 => {
@@ -180,17 +203,16 @@ impl Interpreter {
                 // output
                 let mut params = [Parameter::default(); 1];
                 self.get_params(parameter_mode, &mut params)?;
-                self.output.push(self.value_of(params[0]));
+                let out = self.value_of(params[0])?;
+                self.output.push(out);
                 self.position += 2;
             }
             5 => {
                 // jump if true
                 let mut params = [Parameter::default(); 2];
                 self.get_params(parameter_mode, &mut params)?;
-                if self.value_of(params[0]) != 0 {
-                    let new_pos = self.value_of(params[1]);
-                    self.position = usize::try_from(new_pos)
-                        .map_err(|_| ProgramError::InvalidAddress(new_pos))?;
+                if self.value_of(params[0])? != 0 {
+                    self.position = self.value_of(params[1])?;
                 } else {
                     self.position += 3;
                 }
@@ -199,10 +221,8 @@ impl Interpreter {
                 // jump if false
                 let mut params = [Parameter::default(); 2];
                 self.get_params(parameter_mode, &mut params)?;
-                if self.value_of(params[0]) == 0 {
-                    let new_pos = self.value_of(params[1]);
-                    self.position = usize::try_from(new_pos)
-                        .map_err(|_| ProgramError::InvalidAddress(new_pos))?;
+                if self.value_of(params[0])? == 0 {
+                    self.position = self.value_of(params[1])?;
                 } else {
                     self.position += 3;
                 }
@@ -211,7 +231,7 @@ impl Interpreter {
                 // less than
                 let mut params = [Parameter::default(); 3];
                 self.get_params(parameter_mode, &mut params)?;
-                if self.value_of(params[0]) < self.value_of(params[1]) {
+                if self.value_of(params[0])? < self.value_of(params[1])? {
                     *self.deref_mut(params[2])? = 1;
                 } else {
                     *self.deref_mut(params[2])? = 0;
@@ -229,10 +249,17 @@ impl Interpreter {
                 }
                 self.position += 4;
             }
+            9 => {
+                // adjust relative base
+                let mut params = [Parameter::default(); 1];
+                self.get_params(parameter_mode, &mut params)?;
+                self.relative_base += self.value_of(params[0])?;
+                self.position += 2;
+            }
             99 => return Ok(true),
             _ => return Err(ProgramError::UnknownOpcode(opcode)),
         }
-        Ok(self.position > self.tape.len())
+        Ok(self.position > self.tape.len() as isize)
     }
 }
 
@@ -333,6 +360,40 @@ mod tests {
                 .map_err(|(err, _)| err)?;
             assert_eq!(result.output()[0], *expected);
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_quine() -> Result<(), ProgramError> {
+        let tape = vec![
+            109, 1, 204, -1, 1001, 100, 1, 100, 1008, 100, 16, 101, 1006, 101, 0, 99,
+        ];
+        let result = Interpreter::new(tape.to_vec())
+            .run()
+            .map_err(|(err, _)| err)?;
+        assert_eq!(result.output(), tape.as_slice());
+        Ok(())
+    }
+
+    #[test]
+    fn test_large_mul() -> Result<(), ProgramError> {
+        let tape = vec![1102, 34915192, 34915192, 7, 4, 7, 99, 0];
+        let result = Interpreter::new(tape.to_vec())
+            .run()
+            .map_err(|(err, _)| err)?;
+        let output = result.output()[0];
+        let ndigits = (output as f64).log10().floor() + 1f64;
+        assert_eq!(ndigits, 16f64);
+        Ok(())
+    }
+
+    #[test]
+    fn test_large() -> Result<(), ProgramError> {
+        let tape = vec![104, 1125899906842624, 99];
+        let result = Interpreter::new(tape.to_vec())
+            .run()
+            .map_err(|(err, _)| err)?;
+        assert_eq!(result.output()[0], 1125899906842624);
         Ok(())
     }
 }
