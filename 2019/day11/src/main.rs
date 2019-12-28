@@ -78,15 +78,14 @@ impl Bot {
             n => panic!("invalid facing: {}", n),
         };
         self.position = match self.facing {
-            North => (self.position.0 + 1, self.position.1),
-            East => (self.position.0, self.position.1 + 1),
-            South => (self.position.0 - 1, self.position.1),
-            West => (self.position.0, self.position.1 - 1),
+            North => (self.position.0, self.position.1 + 1),
+            East => (self.position.0 + 1, self.position.1),
+            South => (self.position.0, self.position.1 - 1),
+            West => (self.position.0 - 1, self.position.1),
         }
     }
 
-    pub fn run(mut self) -> HashMap<(isize, isize), Color> {
-        let mut grid = HashMap::new();
+    pub fn run(mut self, grid: &mut HashMap<(isize, isize), Color>) {
         let mut ints_read = 0;
         while let Err((err, prog)) = self
             .interpreter
@@ -103,13 +102,38 @@ impl Bot {
             self.interpreter = prog;
             ints_read += 2;
         }
-        grid
     }
 }
 
 fn part1(tape: &[isize]) -> usize {
     let bot = Bot::new(&tape);
-    bot.run().len()
+    let mut grid = HashMap::new();
+    bot.run(&mut grid);
+    grid.len()
+}
+
+fn part2(tape: &[isize]) -> String {
+    let bot = Bot::new(&tape);
+    let mut grid = HashMap::new();
+    grid.insert((0, 0), White);
+    bot.run(&mut grid);
+    let grid = grid; // immutable from here
+    assert!(grid.len() > 0);
+    let bot = grid.keys().map(|k| k.1).min().unwrap();
+    let top = grid.keys().map(|k| k.1).max().unwrap();
+    let left = grid.keys().map(|k| k.0).min().unwrap();
+    let right = grid.keys().map(|k| k.0).max().unwrap();
+    let mut out = String::new();
+    for y in (bot..=top).rev() {
+        for x in left..=right {
+            out.push(match grid.get(&(x, y)).unwrap_or(&Black) {
+                Black => '.',
+                White => '#',
+            });
+        }
+        out.push('\n');
+    }
+    out
 }
 
 fn main() {
@@ -123,6 +147,7 @@ fn main() {
         })
         .collect();
     println!("Part 1: {}", part1(&input));
+    println!("Part 2: \n{}", part2(&input));
 }
 
 #[derive(StructOpt)]
