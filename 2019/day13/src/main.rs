@@ -131,25 +131,24 @@ fn part2(tape: &[isize]) -> isize {
     tape[0] = 2;
     let mut bytes_read = 0;
     let mut interpreter = intcode::Interpreter::new(tape).with_input(&[0]);
-    let mut last_ball_x: Option<isize> = None;
     let mut state = GameState {
         board: HashMap::new(),
         score: None,
     };
     let mut encoder = None;
-    let mut idx = 0;
-    while let Err((err, prog)) = interpreter.clone().run() {
-        if err != intcode::ProgramError::NoMoreInput {
-            panic!("Unrecoverable error: {:?}", err);
-        }
+    loop {
         // update state
-        {
-            let update = read_gamestate(&prog.output()[bytes_read..]);
-            for (pos, tile) in update.board.iter() {
-                state.board.insert(*pos, *tile);
+        let (update, prog) = match interpreter.clone().run() {
+            Ok(output) => (read_gamestate(&output.output()[bytes_read..]), interpreter),
+            Err((intcode::ProgramError::NoMoreInput, prog)) => {
+                (read_gamestate(&prog.output()[bytes_read..]), prog)
             }
-            state.score = update.score.or(state.score);
+            Err((err, _)) => panic!("Unrecoverable error: {:?}", err),
+        };
+        for (pos, tile) in update.board.iter() {
+            state.board.insert(*pos, *tile);
         }
+        state.score = update.score.or(state.score);
         // record frame
         write_frame(
             encoder.get_or_insert_with(|| {
@@ -169,28 +168,10 @@ fn part2(tape: &[isize]) -> isize {
             break;
         }
         // update AI logic
-        let new_ball_pos = state.ball_pos();
-        let expected_ball_x = if let Some(last_ball_x) = last_ball_x {
-            let ball_next = (
-                new_ball_pos.0 + (new_ball_pos.0 - last_ball_x).signum(),
-                new_ball_pos.1,
-            );
-            if *state.board.get(&ball_next).unwrap_or(&Empty) == Wall {
-                last_ball_x
-            } else {
-                ball_next.0
-            }
-        } else {
-            new_ball_pos.0
-        };
-        let input = (expected_ball_x - state.paddle_x()).signum();
+        let new_ball_x = state.ball_pos().0;
+        let input = (new_ball_x - state.paddle_x()).signum();
         bytes_read = prog.output().len();
-        last_ball_x = Some(new_ball_pos.0);
         interpreter = prog.with_input(&[input]);
-        idx += 1;
-        if idx >= 5000 {
-            break;
-        }
     }
     state.score.unwrap_or(0)
 }
