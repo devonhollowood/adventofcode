@@ -13,26 +13,29 @@ struct Reaction {
 
 fn dfs_order<T, F, IterT>(initial: T, next: F) -> Vec<T>
 where
-    T: Eq + Clone + std::hash::Hash,
+    T: Eq + Clone + std::hash::Hash + std::fmt::Debug,
     F: Fn(&T) -> IterT,
     IterT: IntoIterator<Item = T>,
 {
-    let mut stack = vec![initial];
+    let mut stack = vec![(initial, false)];
     let mut visited = HashSet::new();
     let mut results = Vec::new();
-    while let Some(node) = stack.pop() {
-        if visited.contains(&node) {
-            // our second time visiting, so we've already processed all of the children nodes
+    while let Some((node, visited_as_parent)) = stack.pop() {
+        if visited_as_parent {
             results.push(node);
             continue;
         }
+        if visited.contains(&node) {
+            continue;
+        }
         visited.insert(node.clone());
+        stack.push((node.clone(), true));
         stack.extend(
             next(&node)
                 .into_iter()
-                .filter(|node| !visited.contains(node)),
+                .filter(|node| !visited.contains(node))
+                .map(|node| (node, false)),
         );
-        stack.push(node);
     }
     results
 }
@@ -150,5 +153,22 @@ mod tests {
             part1(&parser::parse(include_str!("../examples/5.txt"))),
             2_210_736
         );
+    }
+
+    #[test]
+    fn test_dfs_order() {
+        let graph: HashMap<_, _> = vec![
+            ('a', vec!['b', 'c']),
+            ('b', vec!['c']),
+            ('c', vec!['d', 'e']),
+            ('d', vec!['b']),
+            ('e', vec![]),
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(
+            dfs_order('a', |ch| graph[ch].iter().cloned()),
+            vec!['e', 'b', 'd', 'c', 'a']
+        )
     }
 }
