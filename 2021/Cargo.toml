@@ -1,0 +1,9 @@
+[package]
+name = "aoc2021"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0"
+itertools = "0.10"
+structopt = "0.3"
