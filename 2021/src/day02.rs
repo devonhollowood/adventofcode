@@ -1,21 +1,25 @@
 use anyhow::{anyhow, Result};
 use chumsky::prelude::*;
 use chumsky::text::*;
-use nalgebra::{vector, Vector2};
 
-type Vec2 = Vector2<i64>;
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Direction {
+    Up(i64),
+    Down(i64),
+    Forward(i64),
+}
 
-fn parser() -> impl Parser<char, Vec<Vec2>, Error = Simple<char>> {
+fn parser() -> impl Parser<char, Vec<Direction>, Error = Simple<char>> {
     let direction = choice((
-        just("up").to((|n: i64| vector![0, -n]) as fn(i64) -> Vec2),
-        just("down").to((|n: i64| vector![0, n]) as fn(_) -> _),
-        just("forward").to((|n: i64| vector![n, 0]) as fn(_) -> _),
+        keyword("up").to(Direction::Up as fn(i64) -> Direction),
+        keyword("down").to(Direction::Down as fn(i64) -> Direction),
+        keyword("forward").to(Direction::Forward as fn(i64) -> Direction),
     ));
 
     direction
         .then_ignore(whitespace())
         .then(int(10).map(|s: String| s.parse::<i64>().unwrap()))
-        .map(|(f, n): (fn(i64) -> Vec2, i64)| f(n))
+        .map(|(f, n): (fn(i64) -> Direction, i64)| f(n))
         .separated_by(just("\n"))
         .allow_trailing()
         .then_ignore(end())
@@ -23,33 +27,62 @@ fn parser() -> impl Parser<char, Vec<Vec2>, Error = Simple<char>> {
 
 /// parses input into list of offsets
 /// right and down are positive directions
-pub fn parse(input: &str) -> Result<Vec<Vector2<i64>>> {
+pub fn parse(input: &str) -> Result<Vec<Direction>> {
     parser()
         .parse(input)
         .map_err(|errs| errs.into_iter().reduce(|acc, err| acc.merge(err)).unwrap())
         .map_err(|err| anyhow!("error parsing day 2 input: {:?}", err))
 }
 
-pub fn part1(input: &[Vector2<i64>]) -> Result<i64> {
-    Ok(input.iter().sum::<Vector2<i64>>().iter().product())
+pub fn part1(input: &[Direction]) -> Result<i64> {
+    let mut pos = (0, 0);
+    for dir in input.iter() {
+        match dir {
+            Direction::Up(y) => pos.1 -= y,
+            Direction::Down(y) => pos.1 += y,
+            Direction::Forward(x) => pos.0 += x,
+        }
+    }
+
+    Ok(pos.0 * pos.1)
 }
 
-pub fn part2(input: &[Vector2<i64>]) -> Result<String> {
-    Ok("Not Implemented".into())
+pub fn part2(input: &[Direction]) -> Result<i64> {
+    let mut aim = 0;
+    let mut pos = (0, 0);
+    for dir in input.iter() {
+        match dir {
+            Direction::Up(y) => aim -= y,
+            Direction::Down(y) => aim += y,
+            Direction::Forward(x) => {
+                pos.0 += x;
+                pos.1 += x * aim;
+            }
+        }
+    }
+
+    Ok(pos.0 * pos.1)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    const INPUT : &str = 
+            r"forward 5
+down 5
+forward 8
+up 3
+down 8
+forward 2";
+
     #[test]
     fn test_parser() {
+        use Direction::*;
         assert_eq!(
             parse("up 1\ndown 2\nforward 3\n").unwrap(),
             vec![
-                vector![0, -1],
-                vector![0, 2],
-                vector![3, 0],
+                Up(1), Down(2), Forward(3)
             ]
         )
     }
@@ -57,14 +90,18 @@ mod tests {
     #[test]
     fn test_part1() {
         let input = parse(
-            r"forward 5
-down 5
-forward 8
-up 3
-down 8
-forward 2",
+            INPUT
         )
         .expect("failed to parse input");
         assert_eq!(part1(&input).unwrap(), 150)
+    }
+
+    #[test]
+    fn test_part2() {
+        let input = parse(
+            INPUT
+        )
+        .expect("failed to parse input");
+        assert_eq!(part2(&input).unwrap(), 900)
     }
 }
