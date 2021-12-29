@@ -1,4 +1,5 @@
 mod day01;
+mod day02;
 
 use anyhow::{Context, Result};
 
@@ -23,6 +24,7 @@ macro_rules! aoc {
 
 fn main() -> Result<()> {
     aoc!(day01);
+    aoc!(day02);
 
     Ok(())
 }
