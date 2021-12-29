@@ -34,7 +34,7 @@ pub fn parse(input: &str) -> Result<Vec<Direction>> {
         .map_err(|err| anyhow!("error parsing day 2 input: {:?}", err))
 }
 
-pub fn part1(input: &[Direction]) -> Result<i64> {
+pub fn part1(input: &[Direction]) -> i64 {
     let mut pos = (0, 0);
     for dir in input.iter() {
         match dir {
@@ -44,10 +44,10 @@ pub fn part1(input: &[Direction]) -> Result<i64> {
         }
     }
 
-    Ok(pos.0 * pos.1)
+    pos.0 * pos.1
 }
 
-pub fn part2(input: &[Direction]) -> Result<i64> {
+pub fn part2(input: &[Direction]) -> i64 {
     let mut aim = 0;
     let mut pos = (0, 0);
     for dir in input.iter() {
@@ -61,7 +61,7 @@ pub fn part2(input: &[Direction]) -> Result<i64> {
         }
     }
 
-    Ok(pos.0 * pos.1)
+    pos.0 * pos.1
 }
 
 #[cfg(test)]
@@ -93,7 +93,7 @@ forward 2";
             INPUT
         )
         .expect("failed to parse input");
-        assert_eq!(part1(&input).unwrap(), 150)
+        assert_eq!(part1(&input), 150)
     }
 
     #[test]
@@ -102,6 +102,6 @@ forward 2";
             INPUT
         )
         .expect("failed to parse input");
-        assert_eq!(part2(&input).unwrap(), 900)
+        assert_eq!(part2(&input), 900)
     }
 }

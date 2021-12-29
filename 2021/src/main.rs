@@ -17,8 +17,8 @@ macro_rules! aoc {
             )
         })?;
         let parsed = $i::parse(&input)?;
-        println!("day {} part 1: {}", n, $i::part1(&parsed)?);
-        println!("day {} part 2: {}", n, $i::part2(&parsed)?);
+        println!("day {} part 1: {}", n, $i::part1(&parsed));
+        println!("day {} part 2: {}", n, $i::part2(&parsed));
     };
 }
 
