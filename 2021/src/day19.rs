@@ -14,12 +14,22 @@ pub struct Scanner {
 /// map of the area
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Map {
+    // beacons relative to initial scanner
     beacons: HashSet<Vec3>,
+    // scanner index -> scanner location relative to initial
+    scanners: BTreeMap<usize, Vec3>,
 }
 
 impl Map {
+    fn from_scanner0(scanner: &Scanner) -> Self {
+        Map {
+            beacons: scanner.beacons.iter().cloned().collect(),
+            scanners: BTreeMap::from([(0, Vec3::new(0, 0, 0))]),
+        }
+    }
+
     /// attempt to accept scanner into map. Return whether matching succeeded
-    fn accept(&mut self, scanner: &Scanner, threshold: usize) -> bool {
+    fn accept(&mut self, scanner: &Scanner, index: usize, threshold: usize) -> bool {
         for rot in rotations() {
             let rotated: Vec<Vec3> = scanner.beacons.iter().map(|point| rot * point).collect();
 
@@ -27,10 +37,9 @@ impl Map {
             // total points in common
             for candidate in rotated.iter() {
                 for map_beacon in self.beacons.iter() {
-                    let points: Vec<Vec3> = rotated
-                        .iter()
-                        .map(|point| point + map_beacon - candidate)
-                        .collect();
+                    // translation needed to map `candidate` to `map_beacon`
+                    let offset = map_beacon - candidate;
+                    let points: Vec<Vec3> = rotated.iter().map(|point| point + offset).collect();
                     let n_matched = points
                         .iter()
                         .filter(|point| self.beacons.contains(point))
@@ -39,6 +48,9 @@ impl Map {
                         for point in points {
                             self.beacons.insert(point);
                         }
+                        // offset maps (0, 0) in the candidate fram to the correct point in the map
+                        // frame
+                        self.scanners.insert(index, offset);
                         return true;
                     }
                 }
@@ -165,13 +177,15 @@ pub fn parse(input: &str) -> Result<Vec<Scanner>> {
     Ok(scanners)
 }
 
+fn manhattan(a: &Vec3, b: &Vec3) -> i64 {
+    (b - a).abs().iter().sum()
+}
+
 // separate to make testable with given data
 fn part1_impl(input: &[Scanner], threshold: usize) -> Map {
     assert!(!input.is_empty());
 
-    let mut map = Map {
-        beacons: input[0].beacons.iter().cloned().collect(),
-    };
+    let mut map = Map::from_scanner0(&input[0]);
 
     // map of index -> scanner for easier processing
     let mut unmatched: BTreeMap<usize, Scanner> =
@@ -179,7 +193,7 @@ fn part1_impl(input: &[Scanner], threshold: usize) -> Map {
     while !unmatched.is_empty() {
         let mut matched = Vec::new();
         for (&index, scanner) in unmatched.iter() {
-            if map.accept(scanner, threshold) {
+            if map.accept(scanner, index, threshold) {
                 matched.push(index);
             }
         }
@@ -197,8 +211,13 @@ pub fn part1(input: &[Scanner]) -> usize {
     map.beacons.len()
 }
 
-pub fn part2(_input: &[Scanner]) -> usize {
-    todo!()
+pub fn part2(input: &[Scanner]) -> i64 {
+    let map = part1_impl(input, 12);
+    map.scanners
+        .values()
+        .flat_map(|a| map.scanners.values().map(|b| manhattan(a, b)))
+        .max()
+        .unwrap()
 }
 
 #[cfg(test)]
@@ -255,10 +274,8 @@ mod tests {
     #[test]
     fn test_accept_simple() {
         let scanners = parse(MATCHING_SCANNERS).unwrap();
-        let mut map = Map {
-            beacons: scanners[0].beacons.iter().cloned().collect(),
-        };
-        assert!(map.accept(&scanners[1], 6));
+        let mut map = Map::from_scanner0(&scanners[0]);
+        assert!(map.accept(&scanners[1], 1, 6));
     }
 
     #[test]
@@ -277,5 +294,36 @@ mod tests {
             .collect();
 
         assert_eq!(map.beacons, solution);
+
+        let solution_scanners = vec![
+            Vec3::new(0, 0, 0),
+            Vec3::new(68, -1246, -43),
+            Vec3::new(1105, -1205, 1229),
+            Vec3::new(-92, -2380, -20),
+            Vec3::new(-20, -1133, 1061),
+        ];
+
+        assert_eq!(
+            map.scanners.values().cloned().collect::<Vec<_>>(),
+            solution_scanners
+        );
+    }
+
+    #[test]
+    fn test_manhattan() {
+        assert_eq!(
+            manhattan(&Vec3::new(1105, -1205, 1229), &Vec3::new(-92, -2380, -20)),
+            3621
+        );
+    }
+
+    #[test]
+    fn test_part2() {
+        const DATA: &str = include_str!("test-data/day19.txt");
+
+        let scanners = parse(DATA).unwrap();
+        assert_eq!(scanners.len(), 5);
+
+        assert_eq!(part2(&scanners), 3621);
     }
 }
