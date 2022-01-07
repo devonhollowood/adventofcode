@@ -68,8 +68,7 @@ pub fn part2(input: &[Direction]) -> i64 {
 mod tests {
     use super::*;
 
-    const INPUT : &str = 
-            r"forward 5
+    const INPUT: &str = r"forward 5
 down 5
 forward 8
 up 3
@@ -81,27 +80,19 @@ forward 2";
         use Direction::*;
         assert_eq!(
             parse("up 1\ndown 2\nforward 3\n").unwrap(),
-            vec![
-                Up(1), Down(2), Forward(3)
-            ]
+            vec![Up(1), Down(2), Forward(3)]
         )
     }
 
     #[test]
     fn test_part1() {
-        let input = parse(
-            INPUT
-        )
-        .expect("failed to parse input");
+        let input = parse(INPUT).expect("failed to parse input");
         assert_eq!(part1(&input), 150)
     }
 
     #[test]
     fn test_part2() {
-        let input = parse(
-            INPUT
-        )
-        .expect("failed to parse input");
+        let input = parse(INPUT).expect("failed to parse input");
         assert_eq!(part2(&input), 900)
     }
 }
