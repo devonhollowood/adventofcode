@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0"
+cached = "0.26"
 chumsky = "0.7"
 itertools = "0.10"
 nalgebra = "0.29"

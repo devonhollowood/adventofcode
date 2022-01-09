@@ -1,56 +1,129 @@
 use anyhow::{anyhow, Context, Result};
+use cached::proc_macro::cached;
 use nalgebra::{Matrix3, Vector3};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 
 type Vec3 = Vector3<i64>;
 type Mat3 = Matrix3<i64>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// A signature is a location- and orientation-independent way of comparing beacons
+/// It keeps track of the distance to each point within range, and matches another signature when
+/// enough distances match
+struct Signature {
+    /// map of distance -> # of points at that distance
+    distances: BTreeMap<i64, usize>,
+}
+
+impl Signature {
+    fn empty() -> Self {
+        Signature {
+            distances: BTreeMap::new(),
+        }
+    }
+
+    fn from_points<'a>(origin: &Vec3, points: impl IntoIterator<Item = &'a Vec3>) -> Self {
+        let mut distances = BTreeMap::new();
+        for point in points.into_iter() {
+            if chebyshev(origin, point) > 2000 {
+                // no one scanner can see both
+                continue;
+            }
+            let dist = manhattan(origin, point);
+            *distances.entry(dist).or_default() += 1;
+        }
+        Signature { distances }
+    }
+
+    fn matches(&self, other: &Signature, threshold: usize) -> bool {
+        let common_distances: usize = self
+            .distances
+            .iter()
+            .map(|(dist, count)| {
+                other
+                    .distances
+                    .get(dist)
+                    .copied()
+                    .unwrap_or_default()
+                    .min(*count)
+            })
+            .sum();
+        common_distances >= threshold
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Scanner {
-    /// relative positions of beacons
-    beacons: Vec<Vec3>,
+    /// relative positions of beacons and their signatures
+    beacons: HashMap<Vec3, Signature>,
 }
 
 /// map of the area
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Map {
-    // beacons relative to initial scanner
-    beacons: HashSet<Vec3>,
-    // scanner index -> scanner location relative to initial
+    /// beacons relative to initial scanner -> Signature
+    beacons: HashMap<Vec3, Signature>,
+    /// scanner index -> scanner location relative to initial
     scanners: BTreeMap<usize, Vec3>,
 }
 
 impl Map {
     fn from_scanner0(scanner: &Scanner) -> Self {
         Map {
-            beacons: scanner.beacons.iter().cloned().collect(),
+            beacons: scanner.beacons.clone(),
             scanners: BTreeMap::from([(0, Vec3::new(0, 0, 0))]),
         }
     }
 
     /// attempt to accept scanner into map. Return whether matching succeeded
     fn accept(&mut self, scanner: &Scanner, index: usize, threshold: usize) -> bool {
-        for rot in rotations() {
-            let rotated: Vec<Vec3> = scanner.beacons.iter().map(|point| rot * point).collect();
+        // loop over each pair of (map beacon, canididate scanner beacon)
+        for (map_beacon, map_beacon_sig) in self.beacons.iter() {
+            for (candidate, candidate_sig) in scanner.beacons.iter() {
+                // skip signatures which do not match
+                if !map_beacon_sig.matches(candidate_sig, threshold) {
+                    continue;
+                }
+                // since we have a strong indication that their may be a match, go ahead with
+                // expensive matching procedure
 
-            // translate each rotated scanner beacon to each map beacon, and see if there are >= 12
-            // total points in common
-            for candidate in rotated.iter() {
-                for map_beacon in self.beacons.iter() {
-                    // translation needed to map `candidate` to `map_beacon`
-                    let offset = map_beacon - candidate;
+                // since we think scanner_beacon may be the same as the map_beacon, we apply a
+                // transformations to confirm:
+                // - apply each rotation in turn to all scanner beacons
+                // - translate our rotated `canididate` to `map_beacon`
+                // - count how many matches we have
+                for rot in rotations() {
+                    let rotated: Vec<Vec3> =
+                        scanner.beacons.keys().map(|point| rot * point).collect();
+                    // translates from rotated scanner frame to map frame
+                    let offset = map_beacon - (rot * candidate);
                     let points: Vec<Vec3> = rotated.iter().map(|point| point + offset).collect();
                     let n_matched = points
                         .iter()
-                        .filter(|point| self.beacons.contains(point))
+                        .filter(|point| self.beacons.contains_key(point))
                         .count();
                     if n_matched >= threshold {
-                        for point in points {
-                            self.beacons.insert(point);
+                        let scanner_loc = offset; // since it was at (0, 0) in its own frame
+                        self.scanners.insert(index, scanner_loc);
+
+                        // add new points, without each other in signatures for now
+                        for point in points.iter() {
+                            self.beacons
+                                .insert(*point, Signature::from_points(point, self.beacons.keys()));
                         }
-                        // offset maps (0, 0) in the candidate fram to the correct point in the map
-                        // frame
-                        self.scanners.insert(index, offset);
+
+                        // now update all points in map to have new points in their signature
+                        for (map_point, map_point_sig) in self.beacons.iter_mut() {
+                            for point in points.iter() {
+                                if chebyshev(map_point, point) > 2000 {
+                                    // no one scanner can see both
+                                    continue;
+                                }
+                                let dist = manhattan(map_point, point);
+                                *map_point_sig.distances.entry(dist).or_default() += 1;
+                            }
+                        }
+
                         return true;
                     }
                 }
@@ -141,6 +214,7 @@ fn rotations() -> Vec<Mat3> {
 
 pub fn parse(input: &str) -> Result<Vec<Scanner>> {
     let mut scanners = Vec::new();
+    // go through and generate scanners without signatures
     for line in input.lines() {
         // skip blank lines
         if line.trim().is_empty() {
@@ -148,7 +222,9 @@ pub fn parse(input: &str) -> Result<Vec<Scanner>> {
         }
         // start a new scanner on --- lines
         if line.trim().starts_with("---") {
-            scanners.push(Scanner { beacons: vec![] });
+            scanners.push(Scanner {
+                beacons: HashMap::new(),
+            });
             continue;
         }
         // this should be a number line, meaning we already have a scanner started
@@ -172,16 +248,36 @@ pub fn parse(input: &str) -> Result<Vec<Scanner>> {
             .collect::<std::result::Result<Vec<_>, _>>()
             .with_context(|| format!("parsing line {}", line))?;
         let point = Vec3::from_vec(parsed);
-        scanners.last_mut().unwrap().beacons.push(point);
+        scanners
+            .last_mut()
+            .unwrap()
+            .beacons
+            .insert(point, Signature::empty());
     }
+
+    // now insert signatures
+    for scanner in scanners.iter_mut() {
+        let beacon_locs: Vec<Vec3> = scanner.beacons.keys().cloned().collect();
+        for (position, signature) in scanner.beacons.iter_mut() {
+            *signature = Signature::from_points(position, &beacon_locs);
+        }
+    }
+
     Ok(scanners)
 }
 
+/// max of distances along each axis
+fn chebyshev(a: &Vec3, b: &Vec3) -> i64 {
+    *(b - a).abs().iter().max().unwrap()
+}
+
+/// sum of distances along each axis
 fn manhattan(a: &Vec3, b: &Vec3) -> i64 {
     (b - a).abs().iter().sum()
 }
 
 // separate to make testable with given data
+#[cached(key = "String", convert = r#"{ format!("{}{:?}", threshold, input) }"#)]
 fn part1_impl(input: &[Scanner], threshold: usize) -> Map {
     assert!(!input.is_empty());
 
@@ -223,6 +319,7 @@ pub fn part2(input: &[Scanner]) -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
 
     const MATCHING_SCANNERS: &str = r"
 --- scanner 0 ---
@@ -244,30 +341,31 @@ mod tests {
 
     #[test]
     fn test_parse() {
+        let parsed = parse(MATCHING_SCANNERS).unwrap();
+        assert_eq!(parsed.len(), 2);
+        {
+            assert_eq!(
+                parsed[0].beacons.keys().cloned().collect::<HashSet<Vec3>>(),
+                HashSet::from([
+                    Vec3::new(-1, -1, 1),
+                    Vec3::new(-2, -2, 2),
+                    Vec3::new(-3, -3, 3),
+                    Vec3::new(-2, -3, 1),
+                    Vec3::new(5, 6, -4),
+                    Vec3::new(8, 0, 7),
+                ])
+            );
+        }
         assert_eq!(
-            parse(MATCHING_SCANNERS).unwrap(),
-            vec![
-                Scanner {
-                    beacons: vec![
-                        Vec3::new(-1, -1, 1),
-                        Vec3::new(-2, -2, 2),
-                        Vec3::new(-3, -3, 3),
-                        Vec3::new(-2, -3, 1),
-                        Vec3::new(5, 6, -4),
-                        Vec3::new(8, 0, 7),
-                    ]
-                },
-                Scanner {
-                    beacons: vec![
-                        Vec3::new(1, -1, 1),
-                        Vec3::new(2, -2, 2),
-                        Vec3::new(3, -3, 3),
-                        Vec3::new(2, -1, 3),
-                        Vec3::new(-5, 4, -6),
-                        Vec3::new(-8, -7, 0),
-                    ]
-                },
-            ]
+            parsed[1].beacons.keys().cloned().collect::<HashSet<Vec3>>(),
+            HashSet::from([
+                Vec3::new(1, -1, 1),
+                Vec3::new(2, -2, 2),
+                Vec3::new(3, -3, 3),
+                Vec3::new(2, -1, 3),
+                Vec3::new(-5, 4, -6),
+                Vec3::new(-8, -7, 0),
+            ])
         );
     }
 
@@ -293,7 +391,10 @@ mod tests {
             .map(|line| Vec3::from_iterator(line.split(',').map(|f| f.parse::<i64>().unwrap())))
             .collect();
 
-        assert_eq!(map.beacons, solution);
+        assert_eq!(
+            map.beacons.keys().cloned().collect::<HashSet<Vec3>>(),
+            solution
+        );
 
         let solution_scanners = vec![
             Vec3::new(0, 0, 0),
