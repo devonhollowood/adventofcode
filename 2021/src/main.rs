@@ -3,6 +3,7 @@ mod day02;
 mod day19;
 
 use anyhow::{Context, Result};
+use std::time::Instant;
 
 macro_rules! aoc {
     ($i:ident) => {
@@ -18,8 +19,28 @@ macro_rules! aoc {
             )
         })?;
         let parsed = $i::parse(&input)?;
-        println!("day {} part 1: {}", n, $i::part1(&parsed));
-        println!("day {} part 2: {}", n, $i::part2(&parsed));
+        {
+            let start = Instant::now();
+            let answer = $i::part1(&parsed);
+            let end = Instant::now();
+            println!(
+                "day {} part 1: {} ({} µs)",
+                n,
+                answer,
+                (end - start).as_micros()
+            );
+        }
+        {
+            let start = Instant::now();
+            let answer = $i::part2(&parsed);
+            let end = Instant::now();
+            println!(
+                "day {} part 1: {} ({} µs)",
+                n,
+                answer,
+                (end - start).as_micros()
+            );
+        }
     };
 }
 
