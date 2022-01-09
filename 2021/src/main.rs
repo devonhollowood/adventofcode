@@ -19,7 +19,15 @@ macro_rules! aoc {
                 &path
             )
         })?;
-        let parsed = $i::parse(&input)?;
+
+        let parsed = {
+            let start = Instant::now();
+            let parsed = $i::parse(&input)?;
+            let end = Instant::now();
+            println!("day {} parsed in {} µs", n, (end - start).as_micros());
+            parsed
+        };
+
         {
             let start = Instant::now();
             let answer = $i::part1(&parsed);
