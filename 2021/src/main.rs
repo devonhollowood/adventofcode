@@ -1,6 +1,7 @@
 mod day01;
 mod day02;
 mod day03;
+mod day04;
 mod day19;
 
 use anyhow::{Context, Result};
@@ -44,7 +45,7 @@ macro_rules! aoc {
             let answer = $i::part2(&parsed);
             let end = Instant::now();
             println!(
-                "day {} part 1: {} ({} µs)",
+                "day {} part 2: {} ({} µs)",
                 n,
                 answer,
                 (end - start).as_micros()
@@ -54,10 +55,14 @@ macro_rules! aoc {
 }
 
 fn main() -> Result<()> {
+    let start = Instant::now();
     aoc!(day01);
     aoc!(day02);
     aoc!(day03);
+    aoc!(day04);
     aoc!(day19);
+    let end = Instant::now();
+    println!("total runtime: {} µs", (end - start).as_micros());
 
     Ok(())
 }
