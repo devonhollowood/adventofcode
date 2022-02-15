@@ -6,7 +6,7 @@ pub fn parse(input: &str) -> Result<&[u8]> {
 
 enum ParseResult {
     Ok,
-    Incomplete,
+    Incomplete(Vec<u8>),
     Unexpected(u8),
 }
 
@@ -49,7 +49,18 @@ fn parse_line(line: &[u8]) -> ParseResult {
     if stack.is_empty() {
         ParseResult::Ok
     } else {
-        ParseResult::Incomplete
+        let needed = stack
+            .into_iter()
+            .rev()
+            .map(|c| match c {
+                b'(' => b')',
+                b'[' => b']',
+                b'{' => b'}',
+                b'<' => b'>',
+                other => panic!("invalid stack char: {}", other),
+            })
+            .collect();
+        ParseResult::Incomplete(needed)
     }
 }
 
@@ -69,8 +80,29 @@ pub fn part1(input: &[u8]) -> usize {
         .sum()
 }
 
-pub fn part2(_input: &[u8]) -> &'static str {
-    "not implemented"
+fn score_incomplete(needed: &[u8]) -> usize {
+    needed.iter().copied().fold(0, |acc, c| {
+        let add = match c {
+            b')' => 1,
+            b']' => 2,
+            b'}' => 3,
+            b'>' => 4,
+            other => panic!("invalid needed char: {}", other),
+        };
+        5 * acc + add
+    })
+}
+
+pub fn part2(input: &[u8]) -> usize {
+    let mut scores: Vec<usize> = input
+        .split(|c| *c == b'\n')
+        .filter_map(|l| match parse_line(l) {
+            ParseResult::Incomplete(needed) => Some(score_incomplete(&needed)),
+            _ => None,
+        })
+        .collect();
+    scores.sort_unstable();
+    scores[scores.len() / 2]
 }
 
 #[cfg(test)]
@@ -92,5 +124,10 @@ mod tests {
     #[test]
     fn test_part1() {
         assert_eq!(part1(INPUT.as_bytes()), 26397);
+    }
+
+    #[test]
+    fn test_part2() {
+        assert_eq!(part2(INPUT.as_bytes()), 288957);
     }
 }
