@@ -39,9 +39,44 @@ fn paths(start: &str, end: &str, graph: &Graph, path_so_far: &[String]) -> Vec<V
         }
         for found in paths(neighbor, end, graph, &updated_path) {
             paths_found.push(
-                updated_path
-                    .iter()
-                    .cloned()
+                std::iter::once(start.to_owned())
+                    .chain(found.into_iter())
+                    .collect(),
+            )
+        }
+    }
+    paths_found
+}
+
+fn paths_2(
+    start: &str,
+    end: &str,
+    graph: &Graph,
+    path_so_far: &[String],
+    revisited: bool,
+) -> Vec<Vec<String>> {
+    if start == end {
+        return vec![vec![end.to_string()]];
+    }
+    let mut paths_found = vec![];
+    let mut updated_path = path_so_far.to_vec();
+    updated_path.push(start.to_string());
+    for neighbor in graph.adjacencies[start].iter() {
+        let mut revisited = revisited; // this one applies for this neighbor and child calls
+        let is_small = neighbor.chars().all(|c| c.is_ascii_lowercase());
+        if neighbor == "start" {
+            continue;
+        }
+        if is_small && path_so_far.contains(neighbor) {
+            if revisited {
+                continue;
+            } else {
+                revisited = true;
+            }
+        }
+        for found in paths_2(neighbor, end, graph, &updated_path, revisited) {
+            paths_found.push(
+                std::iter::once(start.to_owned())
                     .chain(found.into_iter())
                     .collect(),
             )
@@ -51,11 +86,11 @@ fn paths(start: &str, end: &str, graph: &Graph, path_so_far: &[String]) -> Vec<V
 }
 
 pub fn part1(input: &Graph) -> usize {
-    paths("start", "end", input, &mut vec![]).len()
+    paths("start", "end", input, &[]).len()
 }
 
 pub fn part2(input: &Graph) -> usize {
-    todo!()
+    paths_2("start", "end", input, &[], false).len()
 }
 
 #[cfg(test)]
@@ -109,5 +144,12 @@ start-RW
         assert_eq!(part1(&parse(A).unwrap()), 10);
         assert_eq!(part1(&parse(B).unwrap()), 19);
         assert_eq!(part1(&parse(C).unwrap()), 226);
+    }
+
+    #[test]
+    fn test_part2() {
+        assert_eq!(part2(&parse(A).unwrap()), 36);
+        assert_eq!(part2(&parse(B).unwrap()), 103);
+        assert_eq!(part2(&parse(C).unwrap()), 3509);
     }
 }
