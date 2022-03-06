@@ -3,94 +3,105 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct Graph {
-    adjacencies: HashMap<String, Vec<String>>,
+    adjacencies: Vec<Vec<usize>>,  // idx -> list of neighboring idxs
+    smalls: Vec<usize>,            // index of small caves
+    names: HashMap<String, usize>, // name -> idx
 }
 
 pub fn parse(input: &str) -> Result<Graph> {
-    let mut adjacencies: HashMap<String, Vec<String>> = HashMap::new();
+    let mut adjacencies = Vec::new();
+    let mut smalls = Vec::new();
+    let mut names = HashMap::new();
     for line in input.lines().map(|l| l.trim()).filter(|l| !l.is_empty()) {
         if let Some((a, b)) = line.split_once('-') {
-            adjacencies
-                .entry(a.to_string())
-                .or_default()
-                .push(b.to_string());
-            adjacencies
-                .entry(b.to_string())
-                .or_default()
-                .push(a.to_string());
+            let a_idx = *names.entry(a.to_string()).or_insert_with(|| {
+                adjacencies.push(vec![]);
+                let idx = adjacencies.len() - 1;
+                if a.chars().all(|c| c.is_ascii_lowercase()) {
+                    smalls.push(idx);
+                }
+                idx
+            });
+            let b_idx = *names.entry(b.to_string()).or_insert_with(|| {
+                adjacencies.push(vec![]);
+                let idx = adjacencies.len() - 1;
+                if b.chars().all(|c| c.is_ascii_lowercase()) {
+                    smalls.push(idx);
+                }
+                idx
+            });
+            adjacencies[a_idx].push(b_idx);
+            adjacencies[b_idx].push(a_idx);
         } else {
             return Err(anyhow!("line \"{}\" did not contain a dash", line));
         }
     }
-    Ok(Graph { adjacencies })
+    Ok(Graph {
+        adjacencies,
+        smalls,
+        names,
+    })
 }
 
-fn paths(start: &str, end: &str, graph: &Graph, path_so_far: &[String]) -> Vec<Vec<String>> {
+fn part1_helper(start: usize, end: usize, graph: &Graph, path_so_far: &mut Vec<usize>) -> usize {
     if start == end {
-        return vec![vec![end.to_string()]];
+        return 1;
     }
-    let mut paths_found = vec![];
-    let mut updated_path = path_so_far.to_vec();
-    updated_path.push(start.to_string());
-    for neighbor in graph.adjacencies[start].iter() {
-        let is_small = neighbor.chars().all(|c| c.is_ascii_lowercase());
-        if is_small && path_so_far.contains(neighbor) {
+    let mut paths_found = 0;
+    path_so_far.push(start);
+    for neighbor in graph.adjacencies[start].iter().copied() {
+        if graph.smalls.contains(&neighbor) && path_so_far.contains(&neighbor) {
             continue;
         }
-        for found in paths(neighbor, end, graph, &updated_path) {
-            paths_found.push(
-                std::iter::once(start.to_owned())
-                    .chain(found.into_iter())
-                    .collect(),
-            )
-        }
+        paths_found += part1_helper(neighbor, end, graph, path_so_far);
     }
+    path_so_far.pop();
     paths_found
 }
 
-fn paths_2(
-    start: &str,
-    end: &str,
+fn part2_helper(
+    start: usize,
+    end: usize,
     graph: &Graph,
-    path_so_far: &[String],
+    path_so_far: &mut Vec<usize>,
     revisited: bool,
-) -> Vec<Vec<String>> {
+) -> usize {
     if start == end {
-        return vec![vec![end.to_string()]];
+        return 1;
     }
-    let mut paths_found = vec![];
-    let mut updated_path = path_so_far.to_vec();
-    updated_path.push(start.to_string());
-    for neighbor in graph.adjacencies[start].iter() {
-        let mut revisited = revisited; // this one applies for this neighbor and child calls
-        let is_small = neighbor.chars().all(|c| c.is_ascii_lowercase());
-        if neighbor == "start" {
+    let mut paths_found = 0;
+    path_so_far.push(start);
+    let origin = graph.names["start"];
+    for neighbor in graph.adjacencies[start].iter().copied() {
+        if neighbor == origin {
             continue;
         }
-        if is_small && path_so_far.contains(neighbor) {
+        let mut revisited = revisited; // this one applies for this neighbor and child calls
+        if graph.smalls.contains(&neighbor) && path_so_far.contains(&neighbor) {
             if revisited {
                 continue;
             } else {
                 revisited = true;
             }
         }
-        for found in paths_2(neighbor, end, graph, &updated_path, revisited) {
-            paths_found.push(
-                std::iter::once(start.to_owned())
-                    .chain(found.into_iter())
-                    .collect(),
-            )
-        }
+        paths_found += part2_helper(neighbor, end, graph, path_so_far, revisited);
     }
+    path_so_far.pop();
     paths_found
 }
 
 pub fn part1(input: &Graph) -> usize {
-    paths("start", "end", input, &[]).len()
+    part1_helper(input.names["start"], input.names["end"], input, &mut vec![])
 }
 
 pub fn part2(input: &Graph) -> usize {
-    paths_2("start", "end", input, &[], false).len()
+    part2_helper(
+        input.names["start"],
+        input.names["end"],
+        input,
+        &mut vec![],
+        false,
+    )
 }
 
 #[cfg(test)]
