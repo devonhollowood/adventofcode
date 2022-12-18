@@ -1,4 +1,5 @@
 mod day01;
+mod day02;
 
 use anyhow::{Context, Result};
 use std::time::Instant;
@@ -53,6 +54,7 @@ macro_rules! aoc {
 fn main() -> Result<()> {
     let start = Instant::now();
     aoc!(day01);
+    aoc!(day02);
     let end = Instant::now();
     println!("total runtime: {} µs", (end - start).as_micros());
 
