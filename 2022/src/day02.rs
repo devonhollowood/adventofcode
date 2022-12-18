@@ -26,6 +26,26 @@ impl Throw {
             Scissors => 3,
         }
     }
+
+    /// Get the throw that would lose to `self`
+    pub fn lose(&self) -> Throw {
+        use Throw::*;
+        match self {
+            Rock => Scissors,
+            Paper => Rock,
+            Scissors => Paper,
+        }
+    }
+
+    /// Get the throw that would win against `self`
+    pub fn win(&self) -> Throw {
+        use Throw::*;
+        match self {
+            Rock => Paper,
+            Paper => Scissors,
+            Scissors => Rock,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -79,8 +99,22 @@ pub fn part1(input: &[Game]) -> isize {
     input.iter().map(|game| game.score()).sum()
 }
 
+fn part2_impl(game: &Game) -> isize {
+    use Throw::*;
+    let throw = match game.yours {
+        Rock => game.enemy.lose(),
+        Paper => game.enemy,
+        Scissors => game.enemy.win(),
+    };
+    Game {
+        enemy: game.enemy,
+        yours: throw,
+    }
+    .score()
+}
+
 pub fn part2(input: &[Game]) -> isize {
-    todo!()
+    input.iter().map(part2_impl).sum()
 }
 
 #[cfg(test)]
@@ -119,8 +153,7 @@ mod tests {
 
     #[test]
     fn test_part2() {
-        todo!()
-        // let parsed = parse(INPUT).unwrap();
-        // assert_eq!(part2(&parsed), 45000);
+        let parsed = parse(INPUT).unwrap();
+        assert_eq!(part2(&parsed), 12);
     }
 }
