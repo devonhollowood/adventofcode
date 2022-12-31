@@ -4,6 +4,7 @@ mod day03;
 mod day04;
 mod day05;
 mod day06;
+mod day07;
 
 use anyhow::{Context, Result};
 use std::time::Instant;
@@ -63,6 +64,7 @@ fn main() -> Result<()> {
     aoc!(day04);
     aoc!(day05);
     aoc!(day06);
+    aoc!(day07);
     let end = Instant::now();
     println!("total runtime: {} µs", (end - start).as_micros());
 
